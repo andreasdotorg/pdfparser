@@ -33,6 +33,7 @@ Open Scope list_scope.
 (* ####################################################### *)
 (** ** Lexical Analysis *)
 
+Open Scope nat_scope.
 Open Scope char_scope.
 
 Definition eq_ascii (c d : ascii) : bool :=
@@ -51,6 +52,28 @@ Notation "{{ a , .. , b }}" := (check_aux a .. (check_aux b never)  .. ) (at lev
 Notation "c 'isin' f" := (f c) (at level 99).
 
 Eval compute in "b" isin {{ "a", "b", "c"}}.
+
+Fixpoint ascii_sequence_aux (a : ascii) (n : nat) : ascii -> bool :=
+  match n with
+  | O   => (check_aux a never)
+  | S n => let next := (ascii_of_nat (S (nat_of_ascii a))) in
+             (check_aux a (ascii_sequence_aux next n))
+  end.
+
+Definition ascii_sequence (from to : ascii) : ascii -> bool :=
+  let diff := (nat_of_ascii to) - (nat_of_ascii from) in
+  if leb diff 0
+    then never
+    else ascii_sequence_aux from diff.
+
+Notation "{[ a '--' b ]}" := (ascii_sequence a b) (at level 42).
+
+Example ascii_sequence_decimal_works :
+  {["0"--"9"]} = {{"0","1","2","3","4","5","6","7","8","9"}}.
+Proof.
+  unfold ascii_sequence; simpl. unfold ascii_of_pos; simpl.
+  reflexivity.
+Qed.
 
 Definition isWhite (c : ascii) : bool :=
   c isin {{"000", "009", "010", "012", "013", "032"}}.
