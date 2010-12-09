@@ -1,0 +1,178 @@
+%PDF-1.7
+%Á∑·∂
+% vim: set tw=76 ts=2 et :
+1 0 obj
+  <<  /Type /Catalog
+      /Outlines 2 0 R
+      /Pages 3 0 R
+  >>
+endobj
+
+2 0 obj
+  <<  /Type /Outlines
+      /Count 0
+  >>
+endobj
+
+3 0 obj
+  <<  /Type /Pages
+      /Kids [4 0 R]
+      /Count 1
+  >>
+endobj
+
+4 0 obj
+  <<  /Type /Page
+      /Parent 3 0 R
+      /MediaBox [0 0 595.276 841.89]
+      /Contents 5 0 R
+      /Resources <<
+        /ProcSet 6 0 R
+        /XObject <<
+          /Circle 9 0 R
+        >>
+        /Font <<
+          /F1 7 0 R
+          /F2 8 0 R
+          >>
+        >>
+  >>
+endobj
+
+5 0 obj
+  <<  /Length 1343  >>
+stream
+  % BT / ET mark: begin/end text
+  BT
+    80 100 Td
+    /F1 144 Tf (H) Tj
+    /F1 96 Tf (e) Tj
+    /F1 72 Tf (l) Tj
+    /F1 64 Tf (l) Tj
+    /F1 48 Tf (o) Tj
+    /F1 48 Tf ( ) Tj
+    /F1 48 Tf (W) Tj
+    /F1 64 Tf (o) Tj
+    /F1 72 Tf (r) Tj
+    /F1 96 Tf (l) Tj
+    /F1 144 Tf (d) Tj
+  % line width
+  0.1 w
+  ET
+  % a line at the top
+   40     761.89 m
+  555.276 761.89 l
+  S
+  % header text
+  BT
+    % F2 (Times) at 8pt w/ 10pt line
+    /F2 10 Tf  12 TL
+    40 795 Td
+    (jdoe) Tj T*
+    (2010-12-09) Tj T*
+    (ID: test.001) Tj
+  ET
+  % a shitface
+  % store state
+  q
+    % move to page center
+    1 0 0 1 297.638 420.945 cm
+    % red border, yellow fill
+    1.0 0.0 0.0 RG
+    1.0 1.0 0.0 rg
+    % face
+    q
+      2 0 0 2 0 0 cm
+      /Circle Do
+    Q
+    % eye outlines
+    0.0 0.5 0.7 RG
+    1.0 1.0 1.0 rg
+    q 0.3 0 0 0.5 -90 80 cm /Circle Do Q
+    q 0.3 0 0 0.5  90 80 cm /Circle Do Q
+    % iris
+    0.3 0.5 0.7 rg
+    q 0.25 0 0 0.4 -90 75 cm /Circle Do Q
+    q 0.25 0 0 0.4  90 75 cm /Circle Do Q
+    % pupil
+    0 0 0 rg
+    0 0 0 RG
+    q 0.1 0 0 0.2 -90 75 cm /Circle Do Q
+    q 0.1 0 0 0.2  90 75 cm /Circle Do Q
+    % mouth
+    1 0 0 RG
+    1 0 0 rg
+    q
+      1.3 0 0 1 0 -50 cm
+      100 0 m
+      100 -55.228     55.228 -100   0 -100  c
+      -55.228 -100    -100 -55.228  -100 0  c
+      h B
+    Q
+  % restore state
+  Q
+endstream
+endobj
+
+% a circle shape
+9 0 obj
+  <<  /Type /XObject 
+      /Subtype /Form 
+      /FormType 1 
+      /BBox [ -100 -100 100 100 ] 
+      /Matrix [ 1 0 0 1 0 0 ] 
+      /Resources << /ProcSet [ /PDF ] >> 
+      /Length 185
+  >> 
+stream 
+  -100 0 m
+  -100 55.228     -55.228 100   0 100   c
+  55.228 100      100 55.228    100 0   c
+  100 -55.228     55.228 -100   0 -100  c
+  -55.228 -100    -100 -55.228  -100 0  c
+  h B
+endstream 
+endobj
+
+6 0 obj
+  [/PDF /Text]
+endobj
+
+7 0 obj
+  <<  /Type /Font
+      /Subtype /Type1
+      /Name /F1
+      /BaseFont /Helvetica
+      /Encoding /MacRomanEncoding
+  >>
+endobj
+
+8 0 obj
+  <<  /Type /Font
+      /Subtype /Type1
+      /Name /F2
+      /BaseFont /Times-Roman
+      /Encoding /MacRomanEncoding
+  >>
+endobj
+
+xref
+0 10 
+0000000000 65535 f 
+0000000048 00000 n 
+0000000131 00000 n 
+0000000189 00000 n 
+0000000264 00000 n 
+0000000561 00000 n 
+0000002393 00000 n 
+0000002424 00000 n 
+0000002562 00000 n 
+0000001978 00000 n 
+
+trailer
+  <<  /Size 10 
+      /Root 1 0 R
+  >>
+startxref
+2702 
+%%EOF

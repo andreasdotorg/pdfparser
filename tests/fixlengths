@@ -1,0 +1,120 @@
+#!/usr/bin/lua
+-- vim: set syn=lua tw=76 ts=4 et fdm=marker fmr=<<<,>>> :
+-- -------------------------------------------------------------------------
+-- very simple length information computation
+--
+-- Copyright (C) Marco Schöpl 2010
+-- All rights reserved.
+--
+-- This will go through an (incomplete) PDF file received on stdin and
+-- locate all positions matching exactly "/Length FIXME".  At these
+-- locations, "FIXME" is replaced by the length of the next stream.  The
+-- resulting pdf is written to stdout.
+--
+-- The keywords "stream" and "endstream" MUST be preceded by "\n" in order 
+-- to be matched.
+-- 
+--
+--
+-- NOTE: This is a KLUDGE.  It is SLOW.  Expect BUGS.
+
+-- buffer handling <<<
+
+-- buffered file contents
+local buf = ""
+
+-- flush full buffer
+function writeBuffer()
+    if #buf > 0 then
+        io.write(buf)
+        buf = ""
+    end
+end
+
+-- write checked part
+function writePart(n)
+    if n < 1 then return end
+    local b1, b2 = string.sub(buf,1,n), string.sub(buf,n+1)
+    io.write(b1)
+    buf = b2
+end
+
+-- double in size or add n bytes
+function growBuffer(n)
+    local rbuf = io.read(n or math.max(64,#buf))
+    if rbuf then
+        buf = buf .. rbuf
+    else
+        stdin_eof = true
+    end
+end
+
+-- --------------------------------------------------------------------- >>>
+
+-- finding length markers <<<
+
+function processChunk()
+    growBuffer()
+    -- find position of possible /Length entry
+    local p = string.find(buf,"/Length FIXME")  -- full match
+    if p then
+        -- full match
+        writePart(p-1)
+        processLength()
+    else
+        writePart(#buf-16)
+    end
+end
+
+function processLength()
+    assert(string.sub(buf,1,13) == "/Length FIXME",string.sub(buf,1,13))
+    local header = "/Length "
+    local len = findStream()
+    buf = header .. tostring(len) .. string.sub(buf,14)
+end
+
+function findStream()
+    local start
+    repeat
+        start = string.find(buf,"\nstream")
+    until start or #buf > 256                   -- edit this if too small
+    if not start then
+        error "bad /Length to fix: no stream found"
+    else
+        -- find end
+        local stop
+        repeat
+            growBuffer()
+            stop = string.find(buf,"\nendstream")
+        until stop or stdin_eof
+        if not stop then error "bad stream: no end found" end
+        return stop-start-8
+    end
+end
+
+function processFile()
+    while not stdin_eof do
+        processChunk()
+    end
+    writeBuffer()
+end
+
+-- --------------------------------------------------------------------- >>>
+
+-- script [main] <<<
+
+main = processFile
+
+-- running interactively
+if arg then
+    if arg[1] then
+        print [[
+USAGE: fixlengths < infile > outfile
+Replace all "/Length FIXME" by computed length of following stream.]]
+    else
+        main()
+    end
+end
+
+-- --------------------------------------------------------------------- >>>
+

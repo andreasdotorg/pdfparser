@@ -1,0 +1,237 @@
+#!/usr/bin/lua
+-- vim: set syn=lua tw=76 ts=4 et fdm=marker fmr=<<<,>>> :
+-- -------------------------------------------------------------------------
+-- very simple xref table generator
+--
+-- Copyright (C) Marco Schöpl 2010
+-- All rights reserved.
+--
+-- This will go through an (incomplete) PDF file and track all uncompressed
+-- object headers immediately following a newline and not containing a
+-- newline in the header. Everything else is ignored.  In particular, the
+-- current inside-or-outside-of-string/stream state IS IGNORED.
+--
+-- This script will break if the object IDs are non-contiguous (randomly 
+-- ordered is fine, though) or if multiple generations sharing the same
+-- object id are found.
+--
+-- The resulting table is appended to the partial PDF, together with the 
+-- full trailer.  The root object is assumed to be (1 0 obj).  The file is
+-- not modified in any other way.
+--
+--
+--
+-- NOTE: This is a KLUDGE.  It is SLOW.  Expect BUGS.
+
+-- global variables <<<
+
+-- object table
+objects = {}
+
+-- the file handle to read from and its EoF state
+file, file_eof = nil, nil
+
+-- position in file
+pos = 0
+
+-- getc handling
+lastc, ungot = nil, nil
+
+-- --------------------------------------------------------------------- >>>
+
+-- character reading <<<
+
+-- read one character, make undoable
+getc = function()
+    if ungot then
+        ungot = false
+    else
+        lastc = file:read(1)
+        if not lastc then
+            file_eof = true
+            return ""
+        end
+    end
+    pos = pos + 1
+    return lastc
+end
+
+-- undo last read
+ungetc = function()
+    -- cannot do anything if eof reached
+    if file_eof then return end
+    if ungot then
+        error "cannot push back two characters"
+    else
+        ungot = true
+        pos = pos - 1
+    end
+end
+
+-- --------------------------------------------------------------------- >>>
+
+-- character class predicates <<<
+
+-- check if character is space but not NL
+isSpace = function(c)
+    return string.match(c,"%s") and isBoring(c)
+end
+
+-- all non-NL chars are boring as no object definition may start here
+isBoring = function(c)
+    return string.match(c,"[^\r\n]")
+end
+
+-- any NL character
+isNL = function(c)
+    return string.match(c,"[\r\n]")
+end
+
+isDigit = function(c)
+    return string.match(c,"%d")
+end
+
+-- --------------------------------------------------------------------- >>>
+
+-- parser combinators... sort of <<<
+
+many = function(p)
+    while p(getc()) do end
+    ungetc()
+    return true
+end
+
+-- read all characters satisfying p.  True if at least one was read.
+manyOne = function(p)
+    -- check first
+    if p(getc()) then
+        return many(p)
+    else
+        ungetc()
+        return false
+    end
+end
+
+-- 'force-read' a specific character or fail
+force = function(c)
+    if c == getc() then
+        return true
+    else
+        ungetc()
+        return false
+    end
+end
+
+-- --------------------------------------------------------------------- >>>
+
+-- object recognition <<<
+
+-- find possible objects
+function parse()
+    while not file_eof do
+        -- gobble non-NL characters
+        many(isBoring)
+        -- read all NLs
+        many(isNL)
+        -- try reading an object
+        readobj()
+    end
+end
+
+-- check if valid obj header
+function readobj()
+    -- save starting offset
+    local pos0 = pos
+    -- read object ID
+    local oid = readNumber()
+    if not oid then return end
+    -- read object version
+    local ver = manyOne(isSpace) and readNumber()
+    if not ver then return end
+    if manyOne(isSpace) and (force 'o') and (force 'b') and (force 'j') then
+        -- is valid object start, save
+        table.insert(objects, {pos0,oid,ver})
+    end
+end
+
+function readNumber()
+    -- check if number at all
+    local c = getc()
+    if not isDigit(c) then ungetc(); return false end
+    local n = tonumber(c)
+    -- read digits
+    c = getc()
+    while isDigit(c) do
+        n = n*10 + tonumber(c)
+        c = getc()
+    end
+    ungetc()
+    return n
+end
+
+-- --------------------------------------------------------------------- >>>
+
+-- object table serialization <<<
+
+function makeXref()
+    -- xref table string
+    local s = [[
+xref
+0 ]].. tostring(#objects+1) ..[[ 
+0000000000 65535 f 
+]]
+    -- object table
+    obj = {}
+    -- add object entries
+    for k,v in pairs(objects) do
+        obj[v[2]] = string.format("%010d %05d n \n",v[1],v[3])
+    end
+    return s .. table.concat(obj)
+end
+
+function makeTrailer()
+    local xpos = pos
+    local trailer = [[
+trailer
+  <<  /Size ]].. tostring(#objects+1) ..[[ 
+      /Root 1 0 R
+  >>
+startxref
+]]..tostring(xpos)..[[ 
+%%EOF
+]]
+    local xrefs = makeXref()
+    return xrefs.."\n"..trailer
+end
+
+
+-- --------------------------------------------------------------------- >>>
+
+-- argument handling & script execution [main] <<<
+
+function main(filename)
+    file = io.open(filename,"a+b") or error "cannot open file"
+    file:seek "set"
+    parse()
+    if #objects < 1 then
+        print "no objects found, not doing anything"
+    else
+        local trailer = makeTrailer()
+        file:seek "end"
+        file:write(trailer)
+    end
+end
+
+-- running interactively
+if arg then
+    if not arg[1] then
+        print [[
+USAGE: genxref <file>
+Modifies the file to append a PDF xref table.]]
+    else
+        main(arg[1])
+    end
+end
+
+-- --------------------------------------------------------------------- >>>
+
