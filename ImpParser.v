@@ -48,6 +48,7 @@ Definition check_aux (to : ascii) (continuation : ascii -> bool) : ascii -> bool
 
 Eval compute in (check_aux "a" (check_aux "b" (check_aux "c" never))) "c".
 
+(*
 Notation "{{ a , .. , b }}" := (check_aux a .. (check_aux b never)  .. ) (at level 0). 
 Notation "c 'isin' f" := (f c) (at level 99).
 
@@ -92,6 +93,9 @@ Definition isAscii (c : ascii) : bool :=
 Definition isRegularCharacter (c : ascii) : bool :=
   (andb (isAscii c) (negb (orb (isWhite c) (isDelimiter c)))).
 
+Definition isDigit (c : ascii) : bool :=
+  c isin {["0"--"9"]}.
+*)
 (* xxxx *)
 
 Module PDF.
@@ -114,6 +118,112 @@ Inductive PDFObject : Set :=
   | PDFNull : PDFObject
   | PDFIndirect : positive -> Zpos0 -> PDFObject -> PDFObject
   | PDFReference : positive -> Zpos0 -> PDFObject.
+
+(* An option with error messages. *)
+Inductive optionE (X:Type) : Type :=
+  | SomeE : X -> optionE X
+  | NoneE : string -> optionE X.
+
+Implicit Arguments SomeE [[X]].
+Implicit Arguments NoneE [[X]].
+
+Inductive sublist {A : Set} : list A -> list A -> Prop :=
+| sl_eq : forall l, sublist l l
+| sl_cons : forall (c : A) (l l' : list A), sublist l l' -> sublist l (c::l').
+
+Inductive truesublist {A : Set} : list A -> list A -> Prop :=
+(*| tsl_nil : forall l, truesublist [] l *)
+| tsl_cons : forall (c : A) (l l' : list A), sublist l l' -> truesublist l (c::l').
+
+Example sl_ex : (@sublist ascii [] []).
+Proof.
+constructor.
+Qed.
+
+Example sl_ex1 : (sublist [1, 2, 3] [0, 1, 2, 3]).
+Proof.
+  repeat constructor.
+Qed.
+
+Definition parser (T : Type) := 
+  forall l: list ascii, optionE (T * {l' : list ascii | truesublist l' l}).
+
+Check parser.
+
+Require Import Recdef.
+
+Check exist.
+
+Check le.
+Check @truesublist ascii.
+Check transitive _ le.
+Check relation.
+Check forall A, transitive _ (@truesublist A).
+
+Lemma truesublist_transitive : 
+  forall A, transitive _ (@truesublist A).
+Proof.
+  unfold transitive. intros. induction H0.
+  
+
+
+
+Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii) {measure List.length xs } 
+  : optionE (list T * {l'' : list ascii | truesublist l'' xs}) :=
+match p xs with
+| NoneE err        => match acc with
+                      | [] => NoneE err
+                      | _ =>  SomeE ((rev acc), exist _ xs _)
+                        end
+| SomeE (t, xsp) => match xsp with 
+                      | exist xs' H => let xsp' := many_helper _ p (t::acc) xs' in
+                        match xsp' with
+                          | NoneE _ => SomeE ((t::acc), exist _ xs' H)
+                          | SomeE (acc'', exist xs'' H') 
+                            => let H'' := (fun h => _) H' in SomeE (acc'', exist _ xs'' H'')
+
+                        end
+                    end
+end.
+Proof.
+  intros.
+  clear - H.
+  destruct H.
+  induction H.
+    auto.
+    simpl in *. unfold lt in *. apply le_S. assumption.
+Qed.
+
+Fixpoint many {T} (p : parser T) (steps : nat) : parser (list T) :=
+  many_helper p [] steps.
+
+
+
+Fixpoint parse_Integer_aux (tokens : (list ascii)) : optionE(Numeric*(list ascii)) :=
+  match tokens with
+    | [] => NoneE "end of token stream"
+    | c :: tokens' =>
+      if isDigit(c) then
+        match parse_Integer_aux(tokens') with
+          | SomeE (n, tokens'') => SomeE(n, tokens'')
+          | NoneE errors => NoneE errors
+        end
+      else
+        SomeE(Integer 0, tokens)
+  end.
+
+Definition parse_Integer (tokens : (list ascii)) : optionE(Numeric*(list ascii)) :=
+  match tokens with
+    | [] => NoneE "end of token stream"
+    | c :: tokens' =>
+      if isDigit(c) then
+        match parse_Integer_aux(tokens') with
+          | SomeE (Integer n, tokens'') => SomeE(Integer n, tokens'')
+          | NoneE error => NoneE error
+        end
+      else
+        NoneE "Illegal character"
+  end.
 
 boolean,
 integer,
@@ -195,13 +305,6 @@ Proof. reflexivity. Qed.
 (* ####################################################### *)
 (** *** Options with Errors *)
 
-(* An option with error messages. *)
-Inductive optionE (X:Type) : Type :=
-  | SomeE : X -> optionE X
-  | NoneE : string -> optionE X.
-
-Implicit Arguments SomeE [[X]].
-Implicit Arguments NoneE [[X]].
 
 (* Some syntactic sugar to make writing nested match-expressions on
    optionE more convenient. *)
