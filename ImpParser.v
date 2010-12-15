@@ -152,46 +152,64 @@ Check parser.
 
 Require Import Recdef.
 
-Check exist.
+Lemma sublist_transitive : forall A, transitive _ (@sublist A).
+Proof.
+  intros A l l' l'' H H0; generalize dependent l.
+  induction H0.
+    refine (fun _ x => x).
+    intros. constructor. apply (IHsublist _ H).
+Qed.
 
-Check le.
-Check @truesublist ascii.
-Check transitive _ le.
-Check relation.
-Check forall A, transitive _ (@truesublist A).
+Lemma truesublist__sublist : forall {A : Set} (l l' : list A),
+  truesublist l l' -> sublist l l'.
+Proof.
+  intros. inversion H. subst. constructor. assumption.
+Qed.
+
+Lemma truesublist_length : forall {A : Set} {l l' : list A},
+  truesublist l l' -> List.length l < List.length l'.
+Proof.
+  intros. destruct H. induction H.
+    auto.
+    simpl in *; apply le_S; assumption.
+Qed.
 
 Lemma truesublist_transitive : 
   forall A, transitive _ (@truesublist A).
 Proof.
-  unfold transitive. intros. induction H0.
-  
+  intros A l l' l'' H H0. generalize dependent l.
+  destruct H0. induction H; intros.
+    constructor. apply (truesublist__sublist _ _ H).
+    pose proof (IHsublist _ H0). repeat constructor. inversion H1. subst. assumption.
+Qed.
 
-
+Definition tsl_trans {A : Set} {xs xs' xs'' : list A}
+  (H : truesublist xs' xs) (H' : truesublist xs'' xs') : (truesublist xs'' xs).
+    intros.
+    refine (truesublist_transitive _ _ _ _ _ _).
+      apply H'.
+      apply H.
+Defined.
 
 Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii) {measure List.length xs } 
   : optionE (list T * {l'' : list ascii | truesublist l'' xs}) :=
 match p xs with
 | NoneE err        => match acc with
                       | [] => NoneE err
-                      | _ =>  SomeE ((rev acc), exist _ xs _)
+                      | _ =>  NoneE err (* SomeE ((rev acc), exist _ xs admit) *) (* XXX FIXME XXX *)
                         end
 | SomeE (t, xsp) => match xsp with 
                       | exist xs' H => let xsp' := many_helper _ p (t::acc) xs' in
                         match xsp' with
                           | NoneE _ => SomeE ((t::acc), exist _ xs' H)
                           | SomeE (acc'', exist xs'' H') 
-                            => let H'' := (fun h => _) H' in SomeE (acc'', exist _ xs'' H'')
+                            => SomeE (acc'', exist _ xs'' (tsl_trans H H'))
 
                         end
                     end
 end.
 Proof.
-  intros.
-  clear - H.
-  destruct H.
-  induction H.
-    auto.
-    simpl in *. unfold lt in *. apply le_S. assumption.
+  intros. apply (truesublist_length H).
 Qed.
 
 Fixpoint many {T} (p : parser T) (steps : nat) : parser (list T) :=
