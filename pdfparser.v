@@ -127,12 +127,20 @@ Inductive optionE (X:Type) : Type :=
 Implicit Arguments SomeE [[X]].
 Implicit Arguments NoneE [[X]].
 
+Fixpoint list_of_string (s : string) : list ascii :=
+  match s with
+  | EmptyString => []
+  | String c s => c :: (list_of_string s)
+  end.
+
+Fixpoint string_of_list (xs : list ascii) : string :=
+  fold_right String EmptyString xs.
+
 Inductive sublist {A : Set} : list A -> list A -> Prop :=
 | sl_eq : forall l, sublist l l
 | sl_cons : forall (c : A) (l l' : list A), sublist l l' -> sublist l (c::l').
 
 Inductive truesublist {A : Set} : list A -> list A -> Prop :=
-(*| tsl_nil : forall l, truesublist [] l *)
 | tsl_cons : forall (c : A) (l l' : list A), sublist l l' -> truesublist l (c::l').
 
 Example sl_ex : (@sublist ascii [] []).
@@ -191,31 +199,36 @@ Definition tsl_trans {A : Set} {xs xs' xs'' : list A}
       apply H.
 Defined.
 
+Definition tsl_tail {T : Set} (f : ascii*(list ascii) -> optionE T) : parser T :=
+  fun xs => match xs with
+    | [] => NoneE "End of token stream"
+    | (c::t) => match f (c,t) with
+                | NoneE err => NoneE err
+                | SomeE result => SomeE (result, exist _ t (tsl_cons _ _ _ (sl_eq t)))
+                end
+    end.
+
 Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii) {measure List.length xs } 
   : optionE (list T * {l'' : list ascii | truesublist l'' xs}) :=
 match p xs with
-| NoneE err        => match acc with
-                      | [] => NoneE err
-                      | _ =>  NoneE err (* SomeE ((rev acc), exist _ xs admit) *) (* XXX FIXME XXX *)
-                        end
-| SomeE (t, xsp) => match xsp with 
-                      | exist xs' H => let xsp' := many_helper _ p (t::acc) xs' in
-                        match xsp' with
-                          | NoneE _ => SomeE ((t::acc), exist _ xs' H)
-                          | SomeE (acc'', exist xs'' H') 
-                            => SomeE (acc'', exist _ xs'' (tsl_trans H H'))
-
-                        end
-                    end
+| NoneE err        => NoneE err
+| SomeE (t, exist xs' H) => 
+  match many_helper _ p (t::acc) xs' with
+    | NoneE _ => SomeE ((t::acc), exist _ xs' H)
+    | SomeE (acc', exist xs'' H') 
+      => SomeE (acc', exist _ xs'' (tsl_trans H H'))
+  end
 end.
 Proof.
   intros. apply (truesublist_length H).
-Qed.
+Defined.
 
-Fixpoint many {T} (p : parser T) (steps : nat) : parser (list T) :=
-  many_helper p [] steps.
+Definition many {T:Set} (p : parser T) : parser (list T) :=
+  fun xs => many_helper T p [] xs.
 
+Definition match_any : parser ascii := tsl_tail (fun t => SomeE (fst t)).
 
+Eval compute in many match_any (list_of_string "12345"%string).
 
 Fixpoint parse_Integer_aux (tokens : (list ascii)) : optionE(Numeric*(list ascii)) :=
   match tokens with
@@ -278,15 +291,6 @@ Definition classifyChar (c : ascii) : chartype :=
     digit
   else
     other.
-
-Fixpoint list_of_string (s : string) : list ascii :=
-  match s with
-  | EmptyString => []
-  | String c s => c :: (list_of_string s)
-  end.
-
-Fixpoint string_of_list (xs : list ascii) : string :=
-  fold_right String EmptyString xs.
 
 Definition token := string.
 
