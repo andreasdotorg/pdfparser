@@ -1,24 +1,6 @@
 (** * ImpParser: Lexing and Parsing in Coq *)
 (* Version of 6/19/2010 *)
 
-(** The development of the [Imp] language in Imp.v completely ignores
-    issues of concrete syntax -- how an ascii string that a programmer
-    might write gets translated into the abstract syntax trees defined
-    by the datatypes [aexp], [bexp], and [com].  In this file we
-    illustrate how the rest of the story can be filled in by building
-    a simple lexical analyzer and parser using Coq's functional
-    programming facilities.
-
-    This development is not really intended to be understood in
-    detail: the explanations are fairly terse and there are no
-    exercises.  The main point is simply to demonstrate that it can be
-    done.  You are invited to look through the code -- most of it is
-    not very complicated, though the parser relies on some "monadic"
-    programming idioms that may require a little work to make out --
-    but most readers will probably want to just skip down to the
-    Examples section at the very end to get the punchline. *)
-
-(* ####################################################### *)
 (** * Internals *)
 
 Require Import SfLib.
@@ -48,11 +30,9 @@ Definition check_aux (to : ascii) (continuation : ascii -> bool) : ascii -> bool
 
 Eval compute in (check_aux "a" (check_aux "b" (check_aux "c" never))) "c".
 
-(*
 Notation "{{ a , .. , b }}" := (check_aux a .. (check_aux b never)  .. ) (at level 0). 
-Notation "c 'isin' f" := (f c) (at level 99).
 
-Eval compute in "b" isin {{ "a", "b", "c"}}.
+Eval compute in {{ "a", "b", "c"}} "b".
 
 Fixpoint ascii_sequence_aux (a : ascii) (n : nat) : ascii -> bool :=
   match n with
@@ -77,14 +57,14 @@ Proof.
 Qed.
 
 Definition isWhite (c : ascii) : bool :=
-  c isin {{"000", "009", "010", "012", "013", "032"}}.
+  {{"000", "009", "010", "012", "013", "032"}} c.
   (* NUL TAB LF formfeed CR space *)
 
 Notation "x '<=?' y" := (ble_nat x y)
   (at level 70, no associativity) : nat_scope.
 
 Definition isDelimiter (c : ascii) : bool :=
-  c isin {{"(", ")", "<", ">", "[", "]", "{", "}", "/", "%"}}.
+  {{"(", ")", "<", ">", "[", "]", "{", "}", "/", "%"}} c.
 
 Definition isAscii (c : ascii) : bool :=
   let n := nat_of_ascii c in
@@ -94,8 +74,7 @@ Definition isRegularCharacter (c : ascii) : bool :=
   (andb (isAscii c) (negb (orb (isWhite c) (isDelimiter c)))).
 
 Definition isDigit (c : ascii) : bool :=
-  c isin {["0"--"9"]}.
-*)
+  {["0"--"9"]} c.
 (* xxxx *)
 
 Module PDF.
@@ -144,19 +123,12 @@ Inductive truesublist {A : Set} : list A -> list A -> Prop :=
 | tsl_cons : forall (c : A) (l l' : list A), sublist l l' -> truesublist l (c::l').
 
 Example sl_ex : (@sublist ascii [] []).
-Proof.
-constructor.
-Qed.
+Proof. constructor. Qed.
 
 Example sl_ex1 : (sublist [1, 2, 3] [0, 1, 2, 3]).
-Proof.
-  repeat constructor.
-Qed.
+Proof. repeat constructor. Qed.
 
-Definition parser (T : Type) := 
-  forall l: list ascii, optionE (T * {l' : list ascii | truesublist l' l}).
-
-Check parser.
+Definition tsl_tail {A : Set} {c} t := (tsl_cons c t t (@sl_eq A t)).
 
 Require Import Recdef.
 
@@ -199,12 +171,15 @@ Definition tsl_trans {A : Set} {xs xs' xs'' : list A}
       apply H.
 Defined.
 
-Definition tsl_tail {T : Set} (f : ascii*(list ascii) -> optionE T) : parser T :=
+Definition parser (T : Type) := 
+  forall l: list ascii, optionE (T * {l' : list ascii | truesublist l' l}).
+
+Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) : parser T :=
   fun xs => match xs with
     | [] => NoneE "End of token stream"
     | (c::t) => match f (c,t) with
                 | NoneE err => NoneE err
-                | SomeE result => SomeE (result, exist _ t (tsl_cons _ _ _ (sl_eq t)))
+                | SomeE result => SomeE (result, exist _ t (tsl_tail t))
                 end
     end.
 
@@ -214,7 +189,7 @@ match p xs with
 | NoneE err        => NoneE err
 | SomeE (t, exist xs' H) => 
   match many_helper _ p (t::acc) xs' with
-    | NoneE _ => SomeE ((t::acc), exist _ xs' H)
+    | NoneE _ => SomeE (rev (t::acc), exist _ xs' H)
     | SomeE (acc', exist xs'' H') 
       => SomeE (acc', exist _ xs'' (tsl_trans H H'))
   end
@@ -226,9 +201,36 @@ Defined.
 Definition many {T:Set} (p : parser T) : parser (list T) :=
   fun xs => many_helper T p [] xs.
 
-Definition match_any : parser ascii := tsl_tail (fun t => SomeE (fst t)).
+Definition match_any : parser ascii := parse_one_character (fun t => SomeE (fst t)).
 
-Eval compute in many match_any (list_of_string "12345"%string).
+Example many_works :
+  forall l : list ascii, 
+  exists e, 
+    l <> [] ->
+    many match_any l = SomeE (l,e).
+Proof.
+  intro l. induction l; eexists; intros.
+    elimtype False. apply H. reflexivity.
+    
+    inversion IHl. clear IHl. inversion x. inversion H1. 
+    assert (l <> []). subst. clear - c l'. intro C. inversion C.
+    apply H0 in H5. repeat rewrite H4. 
+Admitted.
+
+unfold many. unfold many_helper.
+    unfold many_helper_terminate. fold many_helper_terminate.
+  
+Qed.
+
+Definition match_one_char_with_predicate (p : ascii -> bool) : parser ascii :=
+  parse_one_character (fun t => if p (fst t) then SomeE (fst t) else NoneE "predicate false").
+
+Definition match_digit := match_one_char_with_predicate isDigit.
+
+Definition match_integer := many match_digit.
+
+Eval compute in match_integer (list_of_string "1234foo").
+  
 
 Fixpoint parse_Integer_aux (tokens : (list ascii)) : optionE(Numeric*(list ascii)) :=
   match tokens with
