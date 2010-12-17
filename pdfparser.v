@@ -203,6 +203,15 @@ Definition many {T:Set} (p : parser T) : parser (list T) :=
 
 Definition match_any : parser ascii := parse_one_character (fun t => SomeE (fst t)).
 
+Theorem match_any_works :
+  forall c : ascii,
+    forall l : list ascii,
+      match_any (c::l) = SomeE (c, exist _ l (tsl_tail l)).
+Proof.
+  intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
+Qed.
+
+
 Example many_works :
   forall l : list ascii, 
   exists e, 
@@ -215,6 +224,35 @@ Proof.
     inversion IHl. clear IHl. inversion x. inversion H1. 
     assert (l <> []). subst. clear - c l'. intro C. inversion C.
     apply H0 in H5. repeat rewrite H4. 
+    unfold many. rewrite many_helper_equation.
+    rewrite match_any_works.
+    unfold many in H5.
+
+    Lemma many_helper_cons :
+      forall t p l l' a x,
+        many_helper t p [] l = SomeE (l', x) -> many_helper t p [a] l = SomeE (a::l', x).
+    Proof.
+      intros. rewrite many_helper_equation.
+      induction l.
+        rewrite many_helper_equation in H.
+        Lemma parser_nil_none:
+          forall t,
+            forall p : parser t,
+              exists err,
+                p [] = NoneE err.
+        Proof.
+          intros.  remember (p []) as H. destruct H. inversion p0. inversion H. inversion H0.
+          exists s. reflexivity.
+        Qed.
+        XXX
+        pattern (p []).
+        rewrite parser_nil_none.
+        simpl in H.
+
+    rewrite <- many_helper_equation.
+    unfold match_any. unfold parse_one_character. simpl. fold (@parse_one_character ascii). 
+    fold match_any.
+  
 Admitted.
 
 unfold many. unfold many_helper.
