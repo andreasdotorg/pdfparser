@@ -130,6 +130,29 @@ Proof. repeat constructor. Qed.
 
 Definition tsl_tail {A : Set} {c} t := (tsl_cons c t t (@sl_eq A t)).
 
+Theorem tsl_succ : forall {A : Set} {c : A} l' l,
+  truesublist l' l -> truesublist l' (c::l).
+Proof.
+  intros A c l l' H; generalize dependent c.
+  destruct H.
+  constructor. constructor. assumption.
+Qed.
+
+(* remove n+1 elements *)
+Theorem tsl_Sn {A : Set} (n : nat) (t : list A) (H : List.length t > n) : truesublist (skipn (S n) t) t.
+Proof.
+  generalize dependent t.
+  induction n; intros; simpl; destruct t; try (inversion H; fail).
+    apply tsl_tail.
+    simpl in IHn. apply tsl_succ. apply IHn. clear - H.
+    unfold gt in *. unfold lt in *. simpl in *.
+    apply le_S_n in H. apply H.
+Qed.
+
+
+
+
+
 Require Import Recdef.
 
 Lemma sublist_transitive : forall A, transitive _ (@sublist A).
@@ -211,14 +234,14 @@ Proof.
   intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
 Qed.
 
-Lemma parser_nil_none:
-  forall t,
-    forall p : parser t,
-      exists err,
-        p [] = NoneE err.
+<<<<<<< HEAD:pdfparser.v
+Lemma parser_nil_none : forall t (p : parser t), exists err, p [] = NoneE err.
 Proof.
-  intros.  remember (p []) as H. destruct H. inversion p0. inversion H. inversion H0.
-  exists s. reflexivity.
+  intros.
+  remember (p []) as H.
+  destruct H.
+    inversion p0. inversion H. inversion H0.
+    exists s. reflexivity.
 Qed.
 
 Lemma many_helper_cons :
