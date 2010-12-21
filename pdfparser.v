@@ -10,7 +10,13 @@ Require Import Ascii.
 Require Import ZArith.
 Require Import QArith.
 
+Require Import Recdef.
+
 Open Scope list_scope.
+
+
+
+
 
 (* ####################################################### *)
 (** ** Lexical Analysis *)
@@ -18,11 +24,24 @@ Open Scope list_scope.
 Open Scope nat_scope.
 Open Scope char_scope.
 
+
+
+(* comparisons *)
+
 Definition eq_ascii (c d : ascii) : bool :=
   if ascii_dec c d then true else false.
 
+Notation "x '<=?' y" := (ble_nat x y)
+  (at level 70, no associativity) : nat_scope.
+
+
+
+(* character class helpers *)
+
 Definition never : ascii -> bool :=
   fun _ => false.
+
+
 
 Definition check_aux (to : ascii) (continuation : ascii -> bool) : ascii -> bool :=
   fun c =>
@@ -30,38 +49,37 @@ Definition check_aux (to : ascii) (continuation : ascii -> bool) : ascii -> bool
 
 Eval compute in (check_aux "a" (check_aux "b" (check_aux "c" never))) "c".
 
+
+
 Notation "{{ a , .. , b }}" := (check_aux a .. (check_aux b never)  .. ) (at level 0). 
+
+Notation "a 'isin' f" := (f a) (at level 1, only parsing).
 
 Eval compute in {{ "a", "b", "c"}} "b".
 
-Fixpoint ascii_sequence_aux (a : ascii) (n : nat) : ascii -> bool :=
-  match n with
-  | O   => (check_aux a never)
-  | S n => let next := (ascii_of_nat (S (nat_of_ascii a))) in
-             (check_aux a (ascii_sequence_aux next n))
-  end.
+
 
 Definition ascii_sequence (from to : ascii) : ascii -> bool :=
-  let diff := (nat_of_ascii to) - (nat_of_ascii from) in
-  if leb diff 0
-    then never
-    else ascii_sequence_aux from diff.
+  let (a,c) := (nat_of_ascii from, nat_of_ascii to) in
+  fun chr =>
+    let b := nat_of_ascii chr in
+    (a <=? b) && (b <=? c).
 
 Notation "{[ a '--' b ]}" := (ascii_sequence a b) (at level 42).
 
 Example ascii_sequence_decimal_works :
-  {["0"--"9"]} = {{"0","1","2","3","4","5","6","7","8","9"}}.
-Proof.
-  unfold ascii_sequence; simpl. unfold ascii_of_pos; simpl.
-  reflexivity.
-Qed.
+  let num := {["0"--"9"]} in
+    ("0" isin num) && ("4" isin num) && ("9" isin num)
+    && (negb (("a" isin num) || ("}" isin num) )) = true.
+Proof.  reflexivity.  Qed.
+
+
+
+(* some character classes *)
 
 Definition isWhite (c : ascii) : bool :=
   {{"000", "009", "010", "012", "013", "032"}} c.
   (* NUL TAB LF formfeed CR space *)
-
-Notation "x '<=?' y" := (ble_nat x y)
-  (at level 70, no associativity) : nat_scope.
 
 Definition isDelimiter (c : ascii) : bool :=
   {{"(", ")", "<", ">", "[", "]", "{", "}", "/", "%"}} c.
@@ -75,7 +93,11 @@ Definition isRegularCharacter (c : ascii) : bool :=
 
 Definition isDigit (c : ascii) : bool :=
   {["0"--"9"]} c.
-(* xxxx *)
+
+
+
+(* ####################################################### *)
+(** ** PDF base type *)
 
 Module PDF.
 
@@ -98,6 +120,15 @@ Inductive PDFObject : Set :=
   | PDFIndirect : positive -> Zpos0 -> PDFObject -> PDFObject
   | PDFReference : positive -> Zpos0 -> PDFObject.
 
+End PDF.
+
+
+
+
+
+(* ####################################################### *)
+(** ** option type *)
+
 (* An option with error messages. *)
 Inductive optionE (X:Type) : Type :=
   | SomeE : X -> optionE X
@@ -105,6 +136,13 @@ Inductive optionE (X:Type) : Type :=
 
 Implicit Arguments SomeE [[X]].
 Implicit Arguments NoneE [[X]].
+
+
+
+
+
+(* ####################################################### *)
+(** ** string <--> list *)
 
 Fixpoint list_of_string (s : string) : list ascii :=
   match s with
@@ -115,6 +153,13 @@ Fixpoint list_of_string (s : string) : list ascii :=
 Fixpoint string_of_list (xs : list ascii) : string :=
   fold_right String EmptyString xs.
 
+
+
+
+
+(* ####################################################### *)
+(** ** (true) sublists *)
+
 Inductive sublist {A : Set} : list A -> list A -> Prop :=
 | sl_eq : forall l, sublist l l
 | sl_cons : forall (c : A) (l l' : list A), sublist l l' -> sublist l (c::l').
@@ -122,13 +167,17 @@ Inductive sublist {A : Set} : list A -> list A -> Prop :=
 Inductive truesublist {A : Set} : list A -> list A -> Prop :=
 | tsl_cons : forall (c : A) (l l' : list A), sublist l l' -> truesublist l (c::l').
 
+Definition tsl_tail {A : Set} {c} t := (tsl_cons c t t (@sl_eq A t)).
+
+
+
 Example sl_ex : (@sublist ascii [] []).
 Proof. constructor. Qed.
 
 Example sl_ex1 : (sublist [1, 2, 3] [0, 1, 2, 3]).
 Proof. repeat constructor. Qed.
 
-Definition tsl_tail {A : Set} {c} t := (tsl_cons c t t (@sl_eq A t)).
+
 
 Theorem tsl_succ : forall {A : Set} {c : A} l' l,
   truesublist l' l -> truesublist l' (c::l).
@@ -139,7 +188,8 @@ Proof.
 Qed.
 
 (* remove n+1 elements *)
-Theorem tsl_Sn {A : Set} (n : nat) (t : list A) (H : List.length t > n) : truesublist (skipn (S n) t) t.
+Theorem tsl_Sn {A : Set} (n : nat) (t : list A) (H : List.length t > n) :
+    truesublist (skipn (S n) t) t.
 Proof.
   generalize dependent t.
   induction n; intros; simpl; destruct t; try (inversion H; fail).
@@ -150,18 +200,6 @@ Proof.
 Qed.
 
 
-
-
-
-Require Import Recdef.
-
-Lemma sublist_transitive : forall A, transitive _ (@sublist A).
-Proof.
-  intros A l l' l'' H H0; generalize dependent l.
-  induction H0.
-    refine (fun _ x => x).
-    intros. constructor. apply (IHsublist _ H).
-Qed.
 
 Lemma truesublist__sublist : forall {A : Set} (l l' : list A),
   truesublist l l' -> sublist l l'.
@@ -175,6 +213,16 @@ Proof.
   intros. destruct H. induction H.
     auto.
     simpl in *; apply le_S; assumption.
+Qed.
+
+
+
+Lemma sublist_transitive : forall A, transitive _ (@sublist A).
+Proof.
+  intros A l l' l'' H H0; generalize dependent l.
+  induction H0.
+    refine (fun _ x => x).
+    intros. constructor. apply (IHsublist _ H).
 Qed.
 
 Lemma truesublist_transitive : 
@@ -194,8 +242,28 @@ Definition tsl_trans {A : Set} {xs xs' xs'' : list A}
       apply H.
 Defined.
 
+
+
+
+
+(* ####################################################### *)
+(** ** parser *)
+
 Definition parser (T : Type) := 
   forall l: list ascii, optionE (T * {l' : list ascii | truesublist l' l}).
+
+
+
+Lemma parser_nil_none : forall t (p : parser t), exists err, p [] = NoneE err.
+Proof.
+  intros.
+  remember (p []) as H.
+  destruct H.
+    inversion p0. inversion H. inversion H0.
+    exists s. reflexivity.
+Qed.
+
+
 
 Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) : parser T :=
   fun xs => match xs with
@@ -206,23 +274,7 @@ Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) :
                 end
     end.
 
-Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii) {measure List.length xs } 
-  : optionE (list T * {l'' : list ascii | truesublist l'' xs}) :=
-match p xs with
-| NoneE err        => NoneE err
-| SomeE (t, exist xs' H) => 
-  match many_helper _ p (t::acc) xs' with
-    | NoneE _ => SomeE (rev (t::acc), exist _ xs' H)
-    | SomeE (acc', exist xs'' H') 
-      => SomeE (acc', exist _ xs'' (tsl_trans H H'))
-  end
-end.
-Proof.
-  intros. apply (truesublist_length H).
-Defined.
 
-Definition many {T:Set} (p : parser T) : parser (list T) :=
-  fun xs => many_helper T p [] xs.
 
 Definition match_any : parser ascii := parse_one_character (fun t => SomeE (fst t)).
 
@@ -234,14 +286,28 @@ Proof.
   intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
 Qed.
 
-Lemma parser_nil_none : forall t (p : parser t), exists err, p [] = NoneE err.
+
+
+Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii)
+    {measure List.length xs } :
+        optionE (list T * {l'' : list ascii | truesublist l'' xs}) :=
+match p xs with
+| NoneE err        => NoneE err
+| SomeE (t, exist xs' H) => 
+  match many_helper _ p (t::acc) xs' with
+    | NoneE _ => SomeE (rev (t::acc), exist _ xs' H)
+    | SomeE (acc', exist xs'' H') 
+      => SomeE (acc', exist _ xs'' (tsl_trans H H'))
+  end
+end.
 Proof.
-  intros.
-  remember (p []) as H.
-  destruct H.
-    inversion p0. inversion H. inversion H0.
-    exists s. reflexivity.
-Qed.
+  intros; apply (truesublist_length H).
+Defined.
+
+Definition many {T:Set} (p : parser T) : parser (list T) :=
+  fun xs => many_helper T p [] xs.
+
+
 
 Lemma many_helper_cons :
   forall t p l l' a x,
@@ -289,6 +355,10 @@ unfold many. unfold many_helper.
     unfold many_helper_terminate. fold many_helper_terminate.
   
 Qed.
+
+
+
+
 
 Definition match_one_char_with_predicate (p : ascii -> bool) : parser ascii :=
   parse_one_character (fun t => if p (fst t) then SomeE (fst t) else NoneE "predicate false").
