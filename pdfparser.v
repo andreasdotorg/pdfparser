@@ -211,8 +211,31 @@ Proof.
   intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
 Qed.
 
+Lemma parser_nil_none:
+  forall t,
+    forall p : parser t,
+      exists err,
+        p [] = NoneE err.
+Proof.
+  intros.  remember (p []) as H. destruct H. inversion p0. inversion H. inversion H0.
+  exists s. reflexivity.
+Qed.
 
-Example many_works :
+Lemma many_helper_cons :
+  forall t p l l' a x,
+    many_helper t p [] l = SomeE (l', x) -> many_helper t p [a] l = SomeE (a::l', x).
+Proof.
+  intros. rewrite many_helper_equation.
+  induction l.
+  rewrite many_helper_equation in H.
+
+(*  XXX
+  pattern (p []).
+  rewrite parser_nil_none.
+  simpl in H. *)
+Admitted.  
+
+Theorem many_works :
   forall l : list ascii, 
   exists e, 
     l <> [] ->
@@ -227,28 +250,13 @@ Proof.
     unfold many. rewrite many_helper_equation.
     rewrite match_any_works.
     unfold many in H5.
-
-    Lemma many_helper_cons :
-      forall t p l l' a x,
-        many_helper t p [] l = SomeE (l', x) -> many_helper t p [a] l = SomeE (a::l', x).
-    Proof.
-      intros. rewrite many_helper_equation.
-      induction l.
-        rewrite many_helper_equation in H.
-        Lemma parser_nil_none:
-          forall t,
-            forall p : parser t,
-              exists err,
-                p [] = NoneE err.
-        Proof.
-          intros.  remember (p []) as H. destruct H. inversion p0. inversion H. inversion H0.
-          exists s. reflexivity.
-        Qed.
-        XXX
-        pattern (p []).
-        rewrite parser_nil_none.
-        simpl in H.
-
+    apply many_helper_cons with (a := a) in H5.
+    rewrite H5. destruct x. 
+    remember (exist (fun l'' : list ascii => truesublist l'' (a :: l)) x
+      (tsl_trans (tsl_tail l) t)) as H'.
+    reflexivity.
+    
+    simpl.
     rewrite <- many_helper_equation.
     unfold match_any. unfold parse_one_character. simpl. fold (@parse_one_character ascii). 
     fold match_any.
