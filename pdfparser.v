@@ -141,6 +141,7 @@ Qed.
 (* remove n+1 elements *)
 Theorem tsl_Sn {A : Set} (n : nat) (t : list A) (H : List.length t > n) : truesublist (skipn (S n) t) t.
 Proof.
+  intros.
   generalize dependent t.
   induction n; intros; simpl; destruct t; try (inversion H; fail).
     apply tsl_tail.
@@ -259,24 +260,28 @@ Admitted.
 
 Theorem many_works :
   forall l : list ascii, 
-  exists e, 
-    l <> [] ->
-    many match_any l = SomeE (l,e).
+    exists e, 
+      l <> [] ->
+      many match_any l = SomeE (l,e).
 Proof.
-  intro l. induction l; eexists; intros.
-    elimtype False. apply H. reflexivity.
+  intro l. induction l. (* ; eexists; intros. *)
+    eexists. intros. elim H. reflexivity.
     
-    inversion IHl. clear IHl. inversion x. inversion H1. 
+    inversion IHl. clear IHl. inversion x. inversion H0. 
     assert (l <> []). subst. clear - c l'. intro C. inversion C.
-    apply H0 in H5. repeat rewrite H4. 
+    rewrite H3.
+    assert (a :: l <> []). clear - a l.  intro C. inversion C.
+    set (H4' := H4). clearbody H4'.
+    apply H in H4.
     unfold many. rewrite many_helper_equation.
     rewrite match_any_works.
-    unfold many in H5.
-    apply many_helper_cons with (a := a) in H5.
-    rewrite H5. destruct x. 
+    unfold many in H.
+    apply many_helper_cons with (a := a) in H.
+    rewrite H. destruct x. 
     remember (exist (fun l'' : list ascii => truesublist l'' (a :: l)) x
       (tsl_trans (tsl_tail l) t)) as H'.
-    reflexivity.
+    eexists. intro.
+    reflexivity. assumption.
     
     simpl.
     rewrite <- many_helper_equation.
