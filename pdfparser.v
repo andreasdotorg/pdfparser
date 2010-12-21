@@ -234,7 +234,6 @@ Proof.
   intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
 Qed.
 
-<<<<<<< HEAD:pdfparser.v
 Lemma parser_nil_none : forall t (p : parser t), exists err, p [] = NoneE err.
 Proof.
   intros.
