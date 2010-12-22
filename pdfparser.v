@@ -289,36 +289,31 @@ Proof.
 Admitted.  
 
 Theorem many_works :
-  forall l : list ascii, 
-  exists e, 
-    l <> [] ->
-    many match_any l = SomeE (l,e).
+  forall l : list ascii,
+  (l =  [] /\ exists e, many match_any l = NoneE e) \/
+  (l <> [] /\ exists e, many match_any l = SomeE (l,e)).
 Proof.
-  intro l. induction l; eexists; intros.
-    elimtype False. apply H. reflexivity.
-    
-    inversion IHl. clear IHl. inversion x. inversion H1. 
-    assert (l <> []). subst. clear - c l'. intro C. inversion C.
-    apply H0 in H5. repeat rewrite H4. 
-    unfold many. rewrite many_helper_equation.
-    rewrite match_any_works.
-    unfold many in H5.
-    apply many_helper_cons with (a := a) in H5.
-    rewrite H5. destruct x. 
-    remember (exist (fun l'' : list ascii => truesublist l'' (a :: l)) x
-      (tsl_trans (tsl_tail l) t)) as H'.
-    reflexivity.
-    
-    simpl.
-    rewrite <- many_helper_equation.
-    unfold match_any. unfold parse_one_character. simpl. fold (@parse_one_character ascii). 
-    fold match_any.
-  
-Admitted.
-
-unfold many. unfold many_helper.
-    unfold many_helper_terminate. fold many_helper_terminate.
-  
+  intro l; induction l; intros.
+    left; split; try reflexivity; apply parser_nil_none.
+    right; split.
+      intro C; inversion C.
+      inversion IHl.
+        (* case 1: last character *)
+        inversion H. inversion H1. clear H; clear H1; clear H2.
+        subst; unfold many; rewrite many_helper_equation; simpl.
+        eexists; reflexivity.
+        (* case 2: more characters *)
+        inversion H. inversion H1. clear H; clear H1.
+        subst; unfold many; rewrite many_helper_equation. simpl.
+        destruct l.
+          elim H0; reflexivity.
+          unfold many in H2.
+          (* XXX FIXME many enforces nil as accumulator XXX *)
+          replace (many_helper ascii match_any [a] (a0::l)) with (SomeE (a::a0::l,x)).
+          Focus 2. admit.
+          (* XXX END FIXME XXX *)
+          destruct x.
+          eexists; reflexivity.
 Qed.
 
 
