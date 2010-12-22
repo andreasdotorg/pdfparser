@@ -150,7 +150,7 @@ Fixpoint list_of_string (s : string) : list ascii :=
   | String c s => c :: (list_of_string s)
   end.
 
-Fixpoint string_of_list (xs : list ascii) : string :=
+Definition string_of_list (xs : list ascii) : string :=
   fold_right String EmptyString xs.
 
 
@@ -158,89 +158,56 @@ Fixpoint string_of_list (xs : list ascii) : string :=
 
 
 (* ####################################################### *)
-(** ** (true) sublists *)
+(** ** length measure for lists *)
 
-Inductive sublist {A : Set} : list A -> list A -> Prop :=
-| sl_eq : forall l, sublist l l
-| sl_cons : forall (c : A) (l l' : list A), sublist l l' -> sublist l (c::l').
+Section length_measure.
 
-Inductive truesublist {A : Set} : list A -> list A -> Prop :=
-| tsl_cons : forall (c : A) (l l' : list A), sublist l l' -> truesublist l (c::l').
+  Definition lt_length {A : Set} (l1 l2 : list A) :=
+    List.length l1 < List.length l2.
 
-Definition tsl_tail {A : Set} {c} t := (tsl_cons c t t (@sl_eq A t)).
+  Theorem lt_length_wf {A : Set} : well_founded (@lt_length A).
+  Proof. apply well_founded_ltof.  Qed.
 
+  Set Implicit Arguments.
+  Section lt_length_order.
 
+    Variable A : Set.
 
-Example sl_ex : (@sublist ascii [] []).
-Proof. constructor. Qed.
+    Variables c d : A.
+    Variables l l' l'' : list A.
 
-Example sl_ex1 : (sublist [1, 2, 3] [0, 1, 2, 3]).
-Proof. repeat constructor. Qed.
+    Theorem lt_length_irrefl : ~ lt_length l l.
+    Proof.  apply lt_irrefl.  Qed.
 
+    Theorem lt_length_asym : lt_length l l' -> ~ lt_length l' l.
+    Proof.  apply lt_asym.  Qed.
 
+    Theorem lt_length_trans : lt_length l l' -> lt_length l' l'' -> lt_length l l''.
+    Proof.  apply lt_trans.  Qed.
 
-Theorem tsl_succ : forall {A : Set} {c : A} l' l,
-  truesublist l' l -> truesublist l' (c::l).
-Proof.
-  intros A c l l' H; generalize dependent c.
-  destruct H.
-  constructor. constructor. assumption.
-Qed.
+    Theorem lt_length_not_nil : lt_length l l' -> l' <> nil.
+    Proof.  induction l'; [ inversion 1 | intros _ C; inversion C].  Qed.
 
-(* remove n+1 elements *)
-Theorem tsl_Sn {A : Set} (n : nat) (t : list A) (H : List.length t > n) :
-    truesublist (skipn (S n) t) t.
-Proof.
-  generalize dependent t.
-  induction n; intros; simpl; destruct t; try (inversion H; fail).
-    apply tsl_tail.
-    simpl in IHn. apply tsl_succ. apply IHn. clear - H.
-    unfold gt in *. unfold lt in *. simpl in *.
-    apply le_S_n in H. apply H.
-Qed.
+    Theorem lt_length_tail : lt_length l (c::l).
+    Proof.  cbv; intros; apply le_n.  Qed.
 
+    Theorem lt_length_tails : lt_length (c::l) (d::l') -> lt_length l l'.
+    Proof.  cbv; auto with arith.  Qed.
 
+    Theorem lt_length_cons : lt_length l l' -> lt_length l (c::l').
+    Proof.  cbv; auto with arith.  Qed.
 
-Lemma truesublist__sublist : forall {A : Set} (l l' : list A),
-  truesublist l l' -> sublist l l'.
-Proof.
-  intros. inversion H. subst. constructor. assumption.
-Qed.
+    Theorem lt_length_cons_cons : lt_length l l' -> lt_length (c::l) (d::l').
+    Proof.  cbv; auto with arith.  Qed.
 
-Lemma truesublist_length : forall {A : Set} {l l' : list A},
-  truesublist l l' -> List.length l < List.length l'.
-Proof.
-  intros. destruct H. induction H.
-    auto.
-    simpl in *; apply le_S; assumption.
-Qed.
+    Hint Unfold lt_length.
+    Hint Resolve lt_length_trans lt_length_tail lt_length_tails lt_length_cons
+                    lt_length_cons_cons : pdfparser.
 
+  End lt_length_order.
+  Unset Implicit Arguments.
 
-
-Lemma sublist_transitive : forall A, transitive _ (@sublist A).
-Proof.
-  intros A l l' l'' H H0; generalize dependent l.
-  induction H0.
-    refine (fun _ x => x).
-    intros. constructor. apply (IHsublist _ H).
-Qed.
-
-Lemma truesublist_transitive : 
-  forall A, transitive _ (@truesublist A).
-Proof.
-  intros A l l' l'' H H0. generalize dependent l.
-  destruct H0. induction H; intros.
-    constructor. apply (truesublist__sublist _ _ H).
-    pose proof (IHsublist _ H0). repeat constructor. inversion H1. subst. assumption.
-Qed.
-
-Definition tsl_trans {A : Set} {xs xs' xs'' : list A}
-  (H : truesublist xs' xs) (H' : truesublist xs'' xs') : (truesublist xs'' xs).
-    intros.
-    refine (truesublist_transitive _ _ _ _ _ _).
-      apply H'.
-      apply H.
-Defined.
+End length_measure.
 
 
 
@@ -249,9 +216,9 @@ Defined.
 (* ####################################################### *)
 (** ** parser *)
 
-Definition parser (T : Type) := 
-  forall l: list ascii, optionE (T * {l' : list ascii | truesublist l' l}).
-
+Definition parser (T : Type) :=
+  forall l : list ascii,
+    optionE (T * {l' : list ascii | lt_length l' l}).
 
 
 Lemma parser_nil_none : forall t (p : parser t), exists err, p [] = NoneE err.
@@ -263,14 +230,12 @@ Proof.
     exists s. reflexivity.
 Qed.
 
-
-
 Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) : parser T :=
   fun xs => match xs with
     | [] => NoneE "End of token stream"
     | (c::t) => match f (c,t) with
                 | NoneE err => NoneE err
-                | SomeE result => SomeE (result, exist _ t (tsl_tail t))
+                | SomeE result => SomeE (result, exist _ t (lt_length_tail c t))
                 end
     end.
 
@@ -281,7 +246,7 @@ Definition match_any : parser ascii := parse_one_character (fun t => SomeE (fst 
 Theorem match_any_works :
   forall c : ascii,
     forall l : list ascii,
-      match_any (c::l) = SomeE (c, exist _ l (tsl_tail l)).
+      match_any (c::l) = SomeE (c, exist _ l (lt_length_tail c l)).
 Proof.
   intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
 Qed.
@@ -290,18 +255,18 @@ Qed.
 
 Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii)
     {measure List.length xs } :
-        optionE (list T * {l'' : list ascii | truesublist l'' xs}) :=
+        optionE (list T * {l'' : list ascii | lt_length l'' xs}) :=
 match p xs with
 | NoneE err        => NoneE err
 | SomeE (t, exist xs' H) => 
   match many_helper _ p (t::acc) xs' with
     | NoneE _ => SomeE (rev (t::acc), exist _ xs' H)
     | SomeE (acc', exist xs'' H') 
-      => SomeE (acc', exist _ xs'' (tsl_trans H H'))
+      => SomeE (acc', exist _ xs'' (lt_length_trans H' H))
   end
 end.
 Proof.
-  intros; apply (truesublist_length H).
+  intros; assumption.
 Defined.
 
 Definition many {T:Set} (p : parser T) : parser (list T) :=
