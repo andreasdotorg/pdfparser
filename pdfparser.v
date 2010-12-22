@@ -274,45 +274,37 @@ Definition many {T:Set} (p : parser T) : parser (list T) :=
 
 
 
-Lemma many_helper_cons :
-  forall t p l l' a x,
-    many_helper t p [] l = SomeE (l', x) -> many_helper t p [a] l = SomeE (a::l', x).
+Theorem many_helper_works :
+  forall l acc : list ascii,
+  (l =  [] -> exists e, many_helper _ match_any acc l = NoneE e) /\
+  (l <> [] -> exists e, many_helper _ match_any acc l = SomeE ((rev acc)++l,e)).
 Proof.
-  intros. rewrite many_helper_equation.
-  induction l.
-  rewrite many_helper_equation in H.
-
-(*  XXX
-  pattern (p []).
-  rewrite parser_nil_none.
-  simpl in H. *)
-Admitted.  
+  intro l; induction l; intros;
+  split; intro C; try (inversion C || elim C; reflexivity || fail); clear C.
+    cbv; eexists; reflexivity.
+    pose proof (IHl acc) as IH.
+    inversion IH; clear IH. destruct l.
+      (* case 1: last character *)
+      clear - a. rewrite many_helper_equation. simpl.
+      eexists; reflexivity.
+      (* case 2: more characters *)
+      clear H; assert (a0 :: l <> []) as H by (intro C; inversion C); pose proof H as H';
+      apply H0 in H; clear H0.
+      inversion H. inversion x as [l'].
+      subst; rewrite many_helper_equation. simpl.
+      pose proof (IHl (a::acc)). inversion H2; clear H2; clear H3.
+      apply H4 in H'; clear H4.
+      inversion H'. rewrite H2.
+      destruct x0.
+      simpl; rewrite <- app_assoc; simpl.
+      eexists; reflexivity.
+Qed.
 
 Theorem many_works :
   forall l : list ascii,
   (l =  [] -> exists e, many match_any l = NoneE e) /\
   (l <> [] -> exists e, many match_any l = SomeE (l,e)).
-Proof.
-  intro l; induction l; intros;
-  split; intro C; try (inversion C || elim C; reflexivity || fail); clear C.
-    cbv; eexists; reflexivity.
-    inversion IHl; clear IHl. destruct l.
-      (* case 1: last character *)
-      clear - a. unfold many; rewrite many_helper_equation. simpl.
-      eexists; reflexivity.
-      (* case 2: more characters *)
-      clear H; assert (a0 :: l <> []) as H by (intro C; inversion C);
-      apply H0 in H; clear H0.
-      inversion H. inversion x as [l'].
-      subst; unfold many; rewrite many_helper_equation. simpl.
-      unfold many in H0.
-      (* XXX FIXME rewrite (almost) by H0 [has nil as accumulator] XXX *)
-      replace (many_helper ascii match_any [a] (a0::l)) with (SomeE (a::a0::l,x)).
-      Focus 2. admit.
-      (* XXX END FIXME XXX *)
-      destruct x.
-      eexists; reflexivity.
-Qed.
+Proof.  unfold many; intros. apply many_helper_works.  Qed.
 
 
 
