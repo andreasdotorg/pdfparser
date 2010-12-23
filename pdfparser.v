@@ -166,7 +166,7 @@ Section length_measure.
     List.length l1 < List.length l2.
 
   Theorem lt_length_wf {A : Set} : well_founded (@lt_length A).
-  Proof. apply well_founded_ltof.  Qed.
+  Proof. intro. apply well_founded_ltof.  Qed.
 
   Set Implicit Arguments.
   Section lt_length_order.
@@ -296,7 +296,7 @@ Proof.
       apply H4 in H'; clear H4.
       inversion H'. rewrite H2.
       destruct x0.
-      simpl; rewrite <- app_assoc; simpl.
+      simpl. rewrite app_ass. simpl.
       eexists; reflexivity.
 Qed.
 
@@ -317,8 +317,122 @@ Definition match_digit := match_one_char_with_predicate isDigit.
 
 Definition match_integer := many match_digit.
 
-Eval compute in match_integer (list_of_string "1234foo").
-  
+Definition exist_left_projection {A : Set} {B : A -> Prop} (e : sig B) := 
+  match e with | exist a b => a end.
+
+Definition Z_of_ascii (d : ascii) := Z_of_nat (nat_of_ascii d).
+
+Definition Z_of_digit (d : ascii) := ((Z_of_ascii d) - 48)%Z. 
+
+Definition match_minus := 
+  match_one_char_with_predicate (fun x => eq_ascii x "-"%char).
+
+Eval compute in match_minus (list_of_string "-").
+
+Definition sequential 
+  {A B : Set} (a : parser A) (b : parser B) : parser (A*B) :=
+  fun xs =>
+    match a xs with
+      | SomeE (val_a, exist xs' H) =>
+        match b xs' with
+          | SomeE (val_b, exist xs'' H') => SomeE ((val_a, val_b), 
+                                                   exist _ xs'' (lt_length_trans H' H))
+          | NoneE err => NoneE err
+        end
+      | NoneE err => NoneE err
+    end.
+    
+Definition sequential_leftopt
+  {A B : Set} (a : parser A) (b : parser B) : parser (optionE(A)*B) :=
+  fun xs =>
+    match a xs with
+      | SomeE (val_a, exist xs' H) =>
+        match b xs' with
+          | SomeE (val_b, exist xs'' H') => SomeE ((SomeE val_a, val_b), 
+                                                   exist _ xs'' (lt_length_trans H' H))
+          | NoneE err => NoneE err
+        end
+      | NoneE err =>
+        match b xs with 
+          | SomeE (val_b, xs') => SomeE ((NoneE err, val_b), xs')
+          | NoneE err => NoneE err
+        end
+    end.
+
+Definition sequential_rightopt
+  {A B : Set} (a : parser A) (b : parser B) : parser (A*optionE(B)) :=
+  fun xs =>
+    match a xs with
+      | SomeE (val_a, exist xs' H) =>
+        match b xs' with
+          | SomeE (val_b, exist xs'' H') => SomeE ((val_a, SomeE val_b), 
+                                                   exist _ xs'' (lt_length_trans H' H))
+          | NoneE err => SomeE ((val_a, NoneE err), exist _ xs' H)
+        end
+      | NoneE err => NoneE err
+    end.
+
+Definition alternative 
+  {A : Set} (a b : parser A) : parser (A) :=
+  fun xs =>
+    match a xs with
+      | SomeE (val_a, xs') => 
+        match b xs with
+          | SomeE (val_b, xs'') => 
+            if List.length (exist_left_projection xs') <=?
+              List.length (exist_left_projection xs'')
+            then
+              SomeE (val_a, xs')
+            else
+              SomeE (val_b, xs'')
+          | NoneE err => SomeE (val_a, xs')
+        end
+      | NoneE err => b xs
+    end.
+
+Check ((1, 2), 3).
+
+Definition parse_unsigned_integer : parser Z :=
+  fun xs =>
+    match match_integer xs with
+      | NoneE e => NoneE "No digits found while parsing integer"
+      | SomeE (digits, xs') 
+        => SomeE (fold_left 
+                    (fun a b => a * 10 + b)
+                    (map Z_of_digit digits)
+                    0, 
+                  xs')%Z
+    end.
+
+Definition parse_integer : parser Z :=
+  fun xs =>
+    match sequential_leftopt match_minus parse_unsigned_integer xs with
+      | SomeE ((SomeE(_), val), xs') => SomeE((val * -1)%Z, xs')
+      | SomeE ((NoneE _, val), xs') => SomeE(val, xs')
+      | NoneE err => NoneE err
+    end.
+
+
+Example parse_integer1 :
+  exists e,
+    parse_integer (list_of_string("123")) = SomeE (123%Z, e).
+Proof. cbv. eexists. reflexivity. Qed.
+
+Example parse_integer2 :
+  exists e,
+    parse_integer (list_of_string("123foo")) = SomeE (123%Z, e).
+Proof. cbv. eexists. reflexivity. Qed.
+
+Example parse_integer3 :
+  exists e,
+    parse_integer (list_of_string("foo")) = NoneE e.
+Proof. cbv. eexists. reflexivity. Qed.
+
+Example parse_integer4 :
+  exists e,
+    parse_integer (list_of_string("-123")) = SomeE ((-123)%Z, e).
+Proof. cbv. eexists. reflexivity. Qed.
+
 
 Fixpoint parse_Integer_aux (tokens : (list ascii)) : optionE(Numeric*(list ascii)) :=
   match tokens with
