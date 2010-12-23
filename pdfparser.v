@@ -234,6 +234,8 @@ Proof.
     exists s. reflexivity.
 Qed.
 
+Hint Resolve parser_nil_none : pdfparser.
+
 Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) : parser T :=
   fun xs => match xs with
     | [] => NoneE "End of token stream"
@@ -272,6 +274,8 @@ end.
 Proof.
   intros; assumption.
 Defined.
+
+Hint Rewrite many_helper_equation : pdfparser.
 
 Definition many {T:Set} (p : parser T) : parser (list T) :=
   fun xs => many_helper T p [] xs.
