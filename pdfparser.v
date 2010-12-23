@@ -94,7 +94,8 @@ Definition isRegularCharacter (c : ascii) : bool :=
 Definition isDigit (c : ascii) : bool :=
   {["0"--"9"]} c.
 
-
+Definition isHexDigit (c : ascii) : bool :=
+  (isDigit c) || (c isin {["a"--"f"]}) || (c isin {["A"--"F"]}).
 
 (* ####################################################### *)
 (** ** PDF base type *)
@@ -190,6 +191,9 @@ Section length_measure.
 
     Theorem lt_length_tail : lt_length l (c::l).
     Proof.  cbv; intros; apply le_n.  Qed.
+
+    Theorem lt_length_tail2 : lt_length l (c::d::l).
+    Proof.  cbv. auto with arith. Qed.
 
     Theorem lt_length_tails : lt_length (c::l) (d::l') -> lt_length l l'.
     Proof.  cbv; auto with arith.  Qed.
@@ -308,8 +312,6 @@ Proof.  unfold many; intros. apply many_helper_works.  Qed.
 
 
 
-
-
 Definition match_one_char_with_predicate (p : ascii -> bool) : parser ascii :=
   parse_one_character (fun t => if p (fst t) then SomeE (fst t) else NoneE "predicate false").
 
@@ -324,10 +326,11 @@ Definition Z_of_ascii (d : ascii) := Z_of_nat (nat_of_ascii d).
 
 Definition Z_of_digit (d : ascii) := ((Z_of_ascii d) - 48)%Z. 
 
-Definition match_minus := 
-  match_one_char_with_predicate (fun x => eq_ascii x "-"%char).
+Definition match_sign := 
+  match_one_char_with_predicate (fun x => x isin {{"-", "+"}})%char.
 
-Eval compute in match_minus (list_of_string "-").
+Definition match_exactly (c : ascii) :=
+  match_one_char_with_predicate (fun x => eq_ascii x c).
 
 Definition sequential 
   {A B : Set} (a : parser A) (b : parser B) : parser (A*B) :=
@@ -342,6 +345,19 @@ Definition sequential
       | NoneE err => NoneE err
     end.
     
+Definition sequential3 
+  {A B C : Set} (a : parser A) (b : parser B) (c : parser C) : parser (A*B*C) :=
+  fun xs =>
+    match sequential a b xs with
+      | SomeE (val_a, exist xs' H) =>
+        match c xs' with
+          | SomeE (val_b, exist xs'' H') => SomeE ((val_a, val_b), 
+                                                   exist _ xs'' (lt_length_trans H' H))
+          | NoneE err => NoneE err
+        end
+      | NoneE err => NoneE err
+    end.
+
 Definition sequential_leftopt
   {A B : Set} (a : parser A) (b : parser B) : parser (optionE(A)*B) :=
   fun xs =>
@@ -390,7 +406,78 @@ Definition alternative
       | NoneE err => b xs
     end.
 
-Check ((1, 2), 3).
+Definition collapse_product
+  {l : Type}
+  (e : optionE((ascii*string) * l)) :
+    optionE(string * l) :=
+      match e with
+        | SomeE ((c,s), H) => SomeE ((String c s), H)
+        | NoneE err => NoneE err
+      end.
+
+Definition lift_ascii
+  {l : Type}
+  (e : optionE(ascii * l)) :
+    optionE(string * l) :=
+      match e with
+        | SomeE (c, H) => SomeE ((String c EmptyString), H)
+        | NoneE err => NoneE err
+      end.
+
+Fixpoint match_string_helper (l : list ascii) : parser string :=
+  fun xs =>
+    match l with
+      | []       => NoneE "empty pattern not allowed"
+      | c::l'    => 
+        match l' with
+          | [] => lift_ascii (match_exactly c xs)
+          | c'::l'' 
+            => collapse_product (sequential (match_exactly c) 
+              (match_string_helper l') xs)
+        end
+    end.
+
+Definition match_string (s : string) : parser string :=
+  fun xs => match_string_helper (list_of_string s) xs.
+
+Example match_string1 :
+  exists e,
+    match_string "foo"%string (list_of_string "foobar"%string) = SomeE ("foo"%string, e).
+Proof.
+  cbv. eexists. reflexivity.
+Qed.
+
+Definition parse_boolean : parser PDF.PDFObject :=
+  fun xs =>
+    match alternative (match_string "true") (match_string "false") xs with
+      | SomeE ("true"%string, xs') => SomeE (PDF.PDFBoolean true, xs')
+      | SomeE ("false"%string, xs') => SomeE (PDF.PDFBoolean false, xs')
+      | SomeE (_, xs') => NoneE "das kann eh nicht passieren, aber unsere Typen sind zu schwach"
+      | NoneE err => NoneE err
+    end.
+
+Example parse_boolean1 :
+  exists e,
+    parse_boolean (list_of_string "true"%string) = SomeE (PDF.PDFBoolean true, e).
+Proof.
+  cbv. eexists. reflexivity.
+Qed.
+
+Example parse_boolean2 :
+  exists e,
+    parse_boolean (list_of_string "false"%string) = SomeE (PDF.PDFBoolean false, e).
+Proof.
+  cbv. eexists. reflexivity.
+Qed.
+
+Example parse_boolean3 :
+  exists e,
+    parse_boolean (list_of_string "unsinn"%string) = NoneE e.
+Proof.
+  cbv. eexists. reflexivity.
+Qed.
+
+
 
 Definition parse_unsigned_integer : parser Z :=
   fun xs =>
@@ -406,8 +493,10 @@ Definition parse_unsigned_integer : parser Z :=
 
 Definition parse_integer : parser Z :=
   fun xs =>
-    match sequential_leftopt match_minus parse_unsigned_integer xs with
-      | SomeE ((SomeE(_), val), xs') => SomeE((val * -1)%Z, xs')
+    match sequential_leftopt match_sign parse_unsigned_integer xs with
+      | SomeE ((SomeE("+"%char), val), xs') => SomeE(val, xs')
+      | SomeE ((SomeE("-"%char), val), xs') => SomeE((val * -1)%Z, xs')
+      | SomeE ((SomeE(_), val), xs') => NoneE "das kann eh nicht passieren, aber unsere Typen sind zu schwach"
       | SomeE ((NoneE _, val), xs') => SomeE(val, xs')
       | NoneE err => NoneE err
     end.
@@ -433,32 +522,55 @@ Example parse_integer4 :
     parse_integer (list_of_string("-123")) = SomeE ((-123)%Z, e).
 Proof. cbv. eexists. reflexivity. Qed.
 
+Example parse_integer5 :
+  exists e,
+    parse_integer (list_of_string("+123")) = SomeE ((123)%Z, e).
+Proof. cbv. eexists. reflexivity. Qed.
 
-Fixpoint parse_Integer_aux (tokens : (list ascii)) : optionE(Numeric*(list ascii)) :=
-  match tokens with
-    | [] => NoneE "end of token stream"
-    | c :: tokens' =>
-      if isDigit(c) then
-        match parse_Integer_aux(tokens') with
-          | SomeE (n, tokens'') => SomeE(n, tokens'')
-          | NoneE errors => NoneE errors
-        end
-      else
-        SomeE(Integer 0, tokens)
-  end.
+Example parse_integer6 :
+  exists e,
+    parse_integer (list_of_string("K123")) = NoneE e.
+Proof. cbv. eexists. reflexivity. Qed.
 
-Definition parse_Integer (tokens : (list ascii)) : optionE(Numeric*(list ascii)) :=
-  match tokens with
-    | [] => NoneE "end of token stream"
-    | c :: tokens' =>
-      if isDigit(c) then
-        match parse_Integer_aux(tokens') with
-          | SomeE (Integer n, tokens'') => SomeE(Integer n, tokens'')
-          | NoneE error => NoneE error
-        end
-      else
-        NoneE "Illegal character"
-  end.
+Definition Z_of_hex_digit (c : ascii) :=
+  (if c isin {["0"--"9"]} then
+    Z_of_ascii(c) - Z_of_ascii("0")
+  else if c isin {["a"--"f"]} then
+    Z_of_ascii(c) - Z_of_ascii("a") + 10
+    else if c isin {["A"--"F"]} then
+      Z_of_ascii(c) - Z_of_ascii("A") + 10
+      else -1)%Z.
+
+Definition ascii_of_Z (z : Z) :=
+  ascii_of_nat (Zabs_nat z).
+    
+
+Definition match_hex : parser ascii :=
+  fun xs =>
+    match xs with
+      | []        => NoneE "end of stream while parsing hex"
+      | c::[]     => NoneE "end of stream while parsing hex"
+      | c1::c2::l 
+        => if isHexDigit c1 then
+             if isHexDigit c2 then
+               SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)),
+                      exist _ l (lt_length_tail2 c1 c2 l))
+             else
+               SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
+                      exist _ c2::l lt_length_tail c1 c2::l)
+           else
+             NoneE "no hex digits found"
+    end.
+
+Definition parse_hex_string : parser string :=
+  fun xs =>
+    match
+      sequential3 (match_exactly "<") (many match_hex) (match_exactly ">") xs
+    with
+      | SomeE ((_, l, _), xs') => SomeE (string_of_list l, xs')
+      | NoneE err => NoneE err
+    end.
+
 
 boolean,
 integer,
