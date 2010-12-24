@@ -355,7 +355,7 @@ Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) :
     | [] => NoneE "End of token stream"
     | (c::t) => match f (c,t) with
                 | NoneE err => NoneE err
-                | SomeE result => SomeE (result, exist _ t (lt_length_tail c t))
+                | SomeE result => SomeE (result, exist _ t (sl_tail c t))
                 end
     end.
 
@@ -366,7 +366,7 @@ Definition match_any : parser ascii := parse_one_character (fun t => SomeE (fst 
 Theorem match_any_works :
   forall c : ascii,
     forall l : list ascii,
-      match_any (c::l) = SomeE (c, exist _ l (lt_length_tail c l)).
+      match_any (c::l) = SomeE (c, exist _ l (sl_tail c l)).
 Proof.
   intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
 Qed.
@@ -375,18 +375,20 @@ Qed.
 
 Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii)
     {measure List.length xs } :
-        optionE (list T * {l'' : list ascii | lt_length l'' xs}) :=
+        optionE (list T * {l'' : list ascii | sublist l'' xs}) :=
 match p xs with
 | NoneE err        => NoneE err
 | SomeE (t, exist xs' H) => 
   match many_helper _ p (t::acc) xs' with
     | NoneE _ => SomeE (rev (t::acc), exist _ xs' H)
     | SomeE (acc', exist xs'' H') 
-      => SomeE (acc', exist _ xs'' (lt_length_trans H' H))
+      => SomeE (acc', exist _ xs'' (sublist_trans H' H))
   end
 end.
 Proof.
-  intros; assumption.
+  intros; clear - H.
+  apply sublist__lt_length in H; unfold lt_length in H.
+  assumption.
 Defined.
 
 Hint Rewrite many_helper_equation : pdfparser.
@@ -457,7 +459,7 @@ Definition sequential
       | SomeE (val_a, exist xs' H) =>
         match b xs' with
           | SomeE (val_b, exist xs'' H') => SomeE ((val_a, val_b), 
-                                                   exist _ xs'' (lt_length_trans H' H))
+                                                   exist _ xs'' (sublist_trans H' H))
           | NoneE err => NoneE err
         end
       | NoneE err => NoneE err
@@ -470,7 +472,7 @@ Definition sequential3
       | SomeE (val_a, exist xs' H) =>
         match c xs' with
           | SomeE (val_b, exist xs'' H') => SomeE ((val_a, val_b), 
-                                                   exist _ xs'' (lt_length_trans H' H))
+                                                   exist _ xs'' (sublist_trans H' H))
           | NoneE err => NoneE err
         end
       | NoneE err => NoneE err
@@ -483,7 +485,7 @@ Definition sequential_leftopt
       | SomeE (val_a, exist xs' H) =>
         match b xs' with
           | SomeE (val_b, exist xs'' H') => SomeE ((SomeE val_a, val_b), 
-                                                   exist _ xs'' (lt_length_trans H' H))
+                                                   exist _ xs'' (sublist_trans H' H))
           | NoneE err => NoneE err
         end
       | NoneE err =>
@@ -500,7 +502,7 @@ Definition sequential_rightopt
       | SomeE (val_a, exist xs' H) =>
         match b xs' with
           | SomeE (val_b, exist xs'' H') => SomeE ((val_a, SomeE val_b), 
-                                                   exist _ xs'' (lt_length_trans H' H))
+                                                   exist _ xs'' (sublist_trans H' H))
           | NoneE err => SomeE ((val_a, NoneE err), exist _ xs' H)
         end
       | NoneE err => NoneE err
@@ -672,10 +674,10 @@ Definition match_hex : parser ascii :=
         => if isHexDigit c1 then
              if isHexDigit c2 then
                SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)),
-                      exist _ l (lt_length_tail2 c1 c2 l))
+                      exist _ l (sl_cons c1 (sl_tail c2 l)))
              else
                SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
-                      exist _ c2::l lt_length_tail c1 c2::l)
+                      exist _ c2::l sl_tail c1 c2::l)
            else
              NoneE "no hex digits found"
     end.
