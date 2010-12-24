@@ -192,8 +192,8 @@ Section length_measure.
     Theorem lt_length_tail : lt_length l (c::l).
     Proof.  cbv; intros; apply le_n.  Qed.
 
-    Theorem lt_length_tail2 : lt_length l (c::d::l).
-    Proof.  cbv. auto with arith. Qed.
+    Theorem lt_length_tail2 : l' = c::l -> lt_length l l'.
+    Proof.  cbv. intros. rewrite H. auto with arith. Qed.
 
     Theorem lt_length_tails : lt_length (c::l) (d::l') -> lt_length l l'.
     Proof.  cbv; auto with arith.  Qed.
@@ -544,22 +544,31 @@ Definition Z_of_hex_digit (c : ascii) :=
 Definition ascii_of_Z (z : Z) :=
   ascii_of_nat (Zabs_nat z).
     
+Definition foo {T : Type} (f : T) : parser T :=
+  fun xs => match xs with
+    | [] => NoneE "End of token stream"
+    | (c::t) =>  SomeE (f, exist _ t (lt_length_tail c t))
+    end.
 
 Definition match_hex : parser ascii :=
   fun xs =>
     match xs with
       | []        => NoneE "end of stream while parsing hex"
-      | c::[]     => NoneE "end of stream while parsing hex"
-      | c1::c2::l 
-        => if isHexDigit c1 then
-             if isHexDigit c2 then
-               SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)),
-                      exist _ l (lt_length_tail2 c1 c2 l))
-             else
-               SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
-                      exist _ c2::l lt_length_tail c1 c2::l)
-           else
-             NoneE "no hex digits found"
+      | (c1::t) => SomeE (ascii_of_Z (Z_of_hex_digit(c1)), exist _ t (lt_length_tail c1 t))
+(* 
+        match l with
+          | []     => NoneE "end of stream while parsing hex"
+          | c2::l'
+            => (*if isHexDigit c1 then
+                 if isHexDigit c2 then*)
+                   SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)), exist _ l' _)
+                 (*else
+                   SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
+                          exist _ c2::l lt_length_tail c1 c2::l)
+               else
+                 NoneE "no hex digits found"*)
+        end
+*)
     end.
 
 Definition parse_hex_string : parser string :=
