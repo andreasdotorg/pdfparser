@@ -19,6 +19,21 @@ Open Scope list_scope.
 
 
 (* ####################################################### *)
+(** ** Helpers *)
+
+Theorem list_loop : forall {A : Set} {x : A} {l : list A}, (x::l) <> l.
+  intros; generalize dependent x.
+  induction l; intros x C.
+    inversion C.
+    set (f:= @tl A); pose proof (f_equal f C) as H; simpl in H.
+    apply (IHl _ H).
+Qed.
+
+
+
+
+
+(* ####################################################### *)
 (** ** Lexical Analysis *)
 
 Open Scope nat_scope.
@@ -192,9 +207,6 @@ Section length_measure.
     Theorem lt_length_tail : lt_length l (c::l).
     Proof.  cbv; intros; apply le_n.  Qed.
 
-    Theorem lt_length_tail2 : l' = c::l -> lt_length l l'.
-    Proof.  cbv. intros. rewrite H. auto with arith. Qed.
-
     Theorem lt_length_tails : lt_length (c::l) (d::l') -> lt_length l l'.
     Proof.  cbv; auto with arith.  Qed.
 
@@ -218,11 +230,110 @@ End length_measure.
 
 
 (* ####################################################### *)
+(** ** truer sublist *)
+
+Section true_sublist.
+  Set Implicit Arguments.
+
+  Variable (A : Set).
+
+  Inductive sublist : list A -> list A -> Prop :=
+  | sl_tail : forall (c : A) l, sublist l (c::l)
+  | sl_cons : forall (c : A) l' l, sublist l' l -> sublist l' (c::l).
+
+  Hint Constructors sublist.
+
+  Section sublist_order.
+
+    Theorem sublist__lt_length : forall l l', sublist l' l -> lt_length l' l.
+    Proof.
+      intros l l' H. induction H.
+        apply lt_length_tail.
+        apply lt_length_cons; assumption.
+    Qed.
+
+    Lemma sublist_longer : forall l l', List.length l' > List.length l -> ~ sublist l' l.
+    Proof.
+      intros l l' H C.
+      apply sublist__lt_length in C.
+      unfold lt_length in *; omega.
+    Qed.
+
+    Theorem sublist_not_nil : forall l l', sublist l l' -> l' <> nil.
+    Proof.  induction l'; [ inversion 1 | intros _ C; inversion C].  Qed.
+
+    Theorem sublist_nil : forall c l, sublist [] (c::l).
+    Proof.
+      intros c l; generalize dependent c.
+      induction l; intros.
+        constructor.
+        constructor; apply IHl.
+    Qed.
+
+    Theorem sublist_tails : forall c d l l', sublist (c::l) (d::l') -> sublist l l'.
+    Proof.
+      intros c d l l'; generalize dependent l;
+      generalize dependent d; generalize dependent c.
+      induction l'; intros.
+        inversion H; inversion H2.
+        inversion H; subst.
+          constructor.
+          constructor; apply (IHl' _ _ _ H2).
+    Qed.
+
+    Theorem sublist_irrefl : forall l, ~ sublist l l.
+    Proof.
+      induction l; intro C; inversion C.
+        apply (list_loop H2).
+        subst. apply sublist__lt_length in H1.
+        cbv in H1; omega.
+    Qed.
+
+    Theorem sublist_asym : forall l l', sublist l l' -> ~ sublist l' l.
+    Proof.
+      intros l l' H; induction H.
+        intro C. apply sublist__lt_length in C. cbv in C; omega.
+
+        intro C. apply sublist__lt_length in C. apply sublist__lt_length in H.
+        cbv in H; cbv in C; omega.
+    Qed.
+
+    Theorem sublist_trans : forall l l' l'',
+      sublist l l' -> sublist l' l'' -> sublist l l''.
+    Proof.
+      intros l l' l'' H0 H; generalize dependent l.
+      induction H; intros.
+        constructor; assumption.
+        constructor; apply (IHsublist _ H0).
+    Qed.
+
+    Hint Resolve sublist__lt_length sublist_tails sublist_trans : sublist pdfparser.
+
+  End sublist_order.
+
+  (* additional pseudo-constructor *)
+  Theorem sl_minus : forall (c : A) {l' l}, sublist (c::l') l -> sublist l' l.
+  Proof.
+    intros; destruct l.
+      inversion H.
+      apply sublist_tails in H. constructor; assumption.
+  Qed.
+
+  Hint Resolve sl_minus : core.
+
+  Unset Implicit Arguments.
+End true_sublist.
+
+
+
+
+
+(* ####################################################### *)
 (** ** parser *)
 
 Definition parser (T : Type) :=
   forall l : list ascii,
-    optionE (T * {l' : list ascii | lt_length l' l}).
+    optionE (T * {l' : list ascii | sublist l' l}).
 
 
 Lemma parser_nil_none : forall t (p : parser t), exists err, p [] = NoneE err.
@@ -234,12 +345,14 @@ Proof.
     exists s. reflexivity.
 Qed.
 
+Hint Resolve parser_nil_none : pdfparser.
+
 Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) : parser T :=
   fun xs => match xs with
     | [] => NoneE "End of token stream"
     | (c::t) => match f (c,t) with
                 | NoneE err => NoneE err
-                | SomeE result => SomeE (result, exist _ t (lt_length_tail c t))
+                | SomeE result => SomeE (result, exist _ t (sl_tail c t))
                 end
     end.
 
@@ -250,7 +363,7 @@ Definition match_any : parser ascii := parse_one_character (fun t => SomeE (fst 
 Theorem match_any_works :
   forall c : ascii,
     forall l : list ascii,
-      match_any (c::l) = SomeE (c, exist _ l (lt_length_tail c l)).
+      match_any (c::l) = SomeE (c, exist _ l (sl_tail c l)).
 Proof.
   intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
 Qed.
@@ -259,19 +372,23 @@ Qed.
 
 Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii)
     {measure List.length xs } :
-        optionE (list T * {l'' : list ascii | lt_length l'' xs}) :=
+        optionE (list T * {l'' : list ascii | sublist l'' xs}) :=
 match p xs with
 | NoneE err        => NoneE err
 | SomeE (t, exist xs' H) => 
   match many_helper _ p (t::acc) xs' with
     | NoneE _ => SomeE (rev (t::acc), exist _ xs' H)
     | SomeE (acc', exist xs'' H') 
-      => SomeE (acc', exist _ xs'' (lt_length_trans H' H))
+      => SomeE (acc', exist _ xs'' (sublist_trans H' H))
   end
 end.
 Proof.
-  intros; assumption.
+  intros; clear - H.
+  apply sublist__lt_length in H; unfold lt_length in H.
+  assumption.
 Defined.
+
+Hint Rewrite many_helper_equation : pdfparser.
 
 Definition many {T:Set} (p : parser T) : parser (list T) :=
   fun xs => many_helper T p [] xs.
@@ -339,7 +456,7 @@ Definition sequential
       | SomeE (val_a, exist xs' H) =>
         match b xs' with
           | SomeE (val_b, exist xs'' H') => SomeE ((val_a, val_b), 
-                                                   exist _ xs'' (lt_length_trans H' H))
+                                                   exist _ xs'' (sublist_trans H' H))
           | NoneE err => NoneE err
         end
       | NoneE err => NoneE err
@@ -352,7 +469,7 @@ Definition sequential3
       | SomeE (val_a, exist xs' H) =>
         match c xs' with
           | SomeE (val_b, exist xs'' H') => SomeE ((val_a, val_b), 
-                                                   exist _ xs'' (lt_length_trans H' H))
+                                                   exist _ xs'' (sublist_trans H' H))
           | NoneE err => NoneE err
         end
       | NoneE err => NoneE err
@@ -365,7 +482,7 @@ Definition sequential_leftopt
       | SomeE (val_a, exist xs' H) =>
         match b xs' with
           | SomeE (val_b, exist xs'' H') => SomeE ((SomeE val_a, val_b), 
-                                                   exist _ xs'' (lt_length_trans H' H))
+                                                   exist _ xs'' (sublist_trans H' H))
           | NoneE err => NoneE err
         end
       | NoneE err =>
@@ -382,7 +499,7 @@ Definition sequential_rightopt
       | SomeE (val_a, exist xs' H) =>
         match b xs' with
           | SomeE (val_b, exist xs'' H') => SomeE ((val_a, SomeE val_b), 
-                                                   exist _ xs'' (lt_length_trans H' H))
+                                                   exist _ xs'' (sublist_trans H' H))
           | NoneE err => SomeE ((val_a, NoneE err), exist _ xs' H)
         end
       | NoneE err => NoneE err
@@ -443,9 +560,7 @@ Definition match_string (s : string) : parser string :=
 Example match_string1 :
   exists e,
     match_string "foo"%string (list_of_string "foobar"%string) = SomeE ("foo"%string, e).
-Proof.
-  cbv. eexists. reflexivity.
-Qed.
+Proof.  cbv; eexists; reflexivity.  Qed.
 
 Definition parse_boolean : parser PDF.PDFObject :=
   fun xs =>
@@ -459,23 +574,17 @@ Definition parse_boolean : parser PDF.PDFObject :=
 Example parse_boolean1 :
   exists e,
     parse_boolean (list_of_string "true"%string) = SomeE (PDF.PDFBoolean true, e).
-Proof.
-  cbv. eexists. reflexivity.
-Qed.
+Proof.  cbv; eexists; reflexivity.  Qed.
 
 Example parse_boolean2 :
   exists e,
     parse_boolean (list_of_string "false"%string) = SomeE (PDF.PDFBoolean false, e).
-Proof.
-  cbv. eexists. reflexivity.
-Qed.
+Proof.  cbv; eexists; reflexivity.  Qed.
 
 Example parse_boolean3 :
   exists e,
     parse_boolean (list_of_string "unsinn"%string) = NoneE e.
-Proof.
-  cbv. eexists. reflexivity.
-Qed.
+Proof.  cbv; eexists; reflexivity.  Qed.
 
 
 
@@ -505,32 +614,32 @@ Definition parse_integer : parser Z :=
 Example parse_integer1 :
   exists e,
     parse_integer (list_of_string("123")) = SomeE (123%Z, e).
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer2 :
   exists e,
     parse_integer (list_of_string("123foo")) = SomeE (123%Z, e).
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer3 :
   exists e,
     parse_integer (list_of_string("foo")) = NoneE e.
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer4 :
   exists e,
     parse_integer (list_of_string("-123")) = SomeE ((-123)%Z, e).
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer5 :
   exists e,
     parse_integer (list_of_string("+123")) = SomeE ((123)%Z, e).
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer6 :
   exists e,
     parse_integer (list_of_string("K123")) = NoneE e.
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Definition Z_of_hex_digit (c : ascii) :=
   (if c isin {["0"--"9"]} then
@@ -543,7 +652,8 @@ Definition Z_of_hex_digit (c : ascii) :=
 
 Definition ascii_of_Z (z : Z) :=
   ascii_of_nat (Zabs_nat z).
-    
+
+(* replace T by ascii and weep *)    
 Definition foo {T : Type} (f : T) : parser T :=
   fun xs => match xs with
     | [] => NoneE "End of token stream"
@@ -554,21 +664,17 @@ Definition match_hex : parser ascii :=
   fun xs =>
     match xs with
       | []        => NoneE "end of stream while parsing hex"
-      | (c1::t) => SomeE (ascii_of_Z (Z_of_hex_digit(c1)), exist _ t (lt_length_tail c1 t))
-(* 
-        match l with
-          | []     => NoneE "end of stream while parsing hex"
-          | c2::l'
-            => (*if isHexDigit c1 then
-                 if isHexDigit c2 then*)
-                   SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)), exist _ l' _)
-                 (*else
-                   SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
-                          exist _ c2::l lt_length_tail c1 c2::l)
-               else
-                 NoneE "no hex digits found"*)
-        end
-*)
+      | c::[]     => NoneE "end of stream while parsing hex"
+      | c1::c2::l 
+        => if isHexDigit c1 then
+             if isHexDigit c2 then
+               SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)),
+                      exist _ l (sl_cons c1 (sl_tail c2 l)))
+             else
+               SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
+                      exist _ c2::l sl_tail c1 c2::l)
+           else
+             NoneE "no hex digits found"
     end.
 
 Definition parse_hex_string : parser string :=

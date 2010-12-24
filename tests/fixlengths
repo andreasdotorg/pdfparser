@@ -76,8 +76,9 @@ end
 function findStream()
     local start
     repeat
+        growBuffer()
         start = string.find(buf,"\nstream")
-    until start or #buf > 256                   -- edit this if too small
+    until start or stdin_eof or #buf > 256      -- edit this if too small
     if not start then
         error "bad /Length to fix: no stream found"
     else
