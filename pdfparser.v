@@ -563,9 +563,7 @@ Definition match_string (s : string) : parser string :=
 Example match_string1 :
   exists e,
     match_string "foo"%string (list_of_string "foobar"%string) = SomeE ("foo"%string, e).
-Proof.
-  cbv. eexists. reflexivity.
-Qed.
+Proof.  cbv; eexists; reflexivity.  Qed.
 
 Definition parse_boolean : parser PDF.PDFObject :=
   fun xs =>
@@ -579,23 +577,17 @@ Definition parse_boolean : parser PDF.PDFObject :=
 Example parse_boolean1 :
   exists e,
     parse_boolean (list_of_string "true"%string) = SomeE (PDF.PDFBoolean true, e).
-Proof.
-  cbv. eexists. reflexivity.
-Qed.
+Proof.  cbv; eexists; reflexivity.  Qed.
 
 Example parse_boolean2 :
   exists e,
     parse_boolean (list_of_string "false"%string) = SomeE (PDF.PDFBoolean false, e).
-Proof.
-  cbv. eexists. reflexivity.
-Qed.
+Proof.  cbv; eexists; reflexivity.  Qed.
 
 Example parse_boolean3 :
   exists e,
     parse_boolean (list_of_string "unsinn"%string) = NoneE e.
-Proof.
-  cbv. eexists. reflexivity.
-Qed.
+Proof.  cbv; eexists; reflexivity.  Qed.
 
 
 
@@ -625,32 +617,32 @@ Definition parse_integer : parser Z :=
 Example parse_integer1 :
   exists e,
     parse_integer (list_of_string("123")) = SomeE (123%Z, e).
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer2 :
   exists e,
     parse_integer (list_of_string("123foo")) = SomeE (123%Z, e).
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer3 :
   exists e,
     parse_integer (list_of_string("foo")) = NoneE e.
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer4 :
   exists e,
     parse_integer (list_of_string("-123")) = SomeE ((-123)%Z, e).
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer5 :
   exists e,
     parse_integer (list_of_string("+123")) = SomeE ((123)%Z, e).
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Example parse_integer6 :
   exists e,
     parse_integer (list_of_string("K123")) = NoneE e.
-Proof. cbv. eexists. reflexivity. Qed.
+Proof. cbv; eexists; reflexivity. Qed.
 
 Definition Z_of_hex_digit (c : ascii) :=
   (if c isin {["0"--"9"]} then
