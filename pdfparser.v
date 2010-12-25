@@ -685,6 +685,23 @@ Definition parse_hex_string : parser string :=
       | NoneE err => NoneE err
     end.
 
+Example parse_hex_string1 :
+  exists e,
+    parse_hex_string (list_of_string "<48454c4C4f>"%string) 
+      = SomeE("HELLO"%string, e).
+Proof.
+  cbv. eexists. reflexivity.
+Qed.
+
+Example parse_hex_string2_trailing_zero :
+  exists e,
+    parse_hex_string (list_of_string "<48454c4C5>"%string) 
+      = SomeE("HELLP"%string, e).
+Proof.
+  cbv. eexists. reflexivity.
+Qed.
+
+
 
 boolean,
 integer,
