@@ -307,6 +307,57 @@ Section true_sublist.
         constructor; apply (IHsublist _ H0).
     Qed.
 
+    Theorem sublist_sublisteq_trans : forall l l' l'',
+      sublist l l' -> (sublist l' l'' \/ l' = l'') -> sublist l l''.
+    Proof.
+      intros l l' l''; generalize dependent l'; generalize dependent l.
+      induction l''; intros.
+        inversion H0.
+          inversion H1.
+          subst; inversion H.
+        inversion H0.
+          apply sublist_trans with l'; assumption.
+          subst; assumption.
+    Qed.
+
+    Lemma sublist_Acc_nil : Acc sublist [].
+    Proof.  constructor. intros l H; inversion H.  Qed.
+
+    Lemma list_emptyset_nil : ~ inhabited A -> forall l : list A, l = [].
+    Proof.
+      intros C l.
+      induction l.
+        reflexivity.
+        elimtype False. apply C. constructor. assumption.
+    Qed.
+
+    Theorem sublist_wf_empty : ~ inhabited A -> well_founded sublist.
+    Proof.
+      intro CI. pose proof (list_emptyset_nil CI).
+      unfold well_founded.
+      intro a; rewrite (H a).
+      constructor. intros b C; inversion C.
+    Qed.
+
+    Theorem sublist_wf_inhabited : inhabited A -> well_founded sublist.
+    Proof.
+      intro HI. inversion HI as [x].
+      unfold well_founded.
+      cut (forall l' l, sublist l' l -> Acc sublist l').
+        intros H l.
+        refine (H l (x::l) _). apply sl_tail.
+
+        intros l' l; generalize dependent l'.
+        induction l; intros.
+          inversion H.
+
+          constructor; intros l'' H0.
+          apply IHl. clear - H H0.
+          inversion H; subst.
+            assumption.
+            apply sublist_trans with l'; assumption.
+    Qed.
+
     Hint Resolve sublist__lt_length sublist_tails sublist_trans : sublist pdfparser.
 
   End sublist_order.
