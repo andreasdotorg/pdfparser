@@ -16,16 +16,16 @@ Open Scope list_scope.
 
 
 
-
-
 (* ####################################################### *)
 (** ** Helpers *)
+
+Check tail.
 
 Theorem list_loop : forall {A : Set} {x : A} {l : list A}, (x::l) <> l.
   intros; generalize dependent x.
   induction l; intros x C.
     inversion C.
-    set (f:= @tl A); pose proof (f_equal f C) as H; simpl in H.
+    set (f:= @tail A); pose proof (f_equal f C) as H; simpl in H.
     apply (IHl _ H).
 Qed.
 
@@ -704,14 +704,7 @@ Definition Z_of_hex_digit (c : ascii) :=
 Definition ascii_of_Z (z : Z) :=
   ascii_of_nat (Zabs_nat z).
 
-(* replace T by ascii and weep *)    
-Definition foo {T : Type} (f : T) : parser T :=
-  fun xs => match xs with
-    | [] => NoneE "End of token stream"
-    | (c::t) =>  SomeE (f, exist _ t (lt_length_tail c t))
-    end.
-
-Definition match_hex : parser ascii :=
+Program Definition match_hex : parser ascii :=
   fun xs =>
     match xs with
       | []        => NoneE "end of stream while parsing hex"
@@ -720,13 +713,19 @@ Definition match_hex : parser ascii :=
         => if isHexDigit c1 then
              if isHexDigit c2 then
                SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)),
-                      exist _ l (sl_cons c1 (sl_tail c2 l)))
+                      exist _ l _)
              else
                SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
-                      exist _ c2::l sl_tail c1 c2::l)
+                      exist _ (c2::l) _)
            else
              NoneE "no hex digits found"
     end.
+Next Obligation.
+  apply sl_cons. apply sl_tail.
+Qed.
+Next Obligation.
+  apply sl_tail.
+Qed.
 
 Definition parse_hex_string : parser string :=
   fun xs =>
