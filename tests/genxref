@@ -148,7 +148,7 @@ function readobj()
     -- read object version
     local ver = manyOne(isSpace) and readNumber()
     if not ver then return end
-    if manyOne(isSpace) and (force 'o') and (force 'b') and (force 'j') then
+    if manyOne(isSpace) and (force 'o') and (force 'b') and (force 'j') and manyOne(isSpace) then
         -- is valid object start, save
         table.insert(objects, {pos0,oid,ver})
     end
