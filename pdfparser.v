@@ -1,6 +1,3 @@
-(** * ImpParser: Lexing and Parsing in Coq *)
-(* Version of 6/19/2010 *)
-
 (** * Internals *)
 
 Require Import SfLib.
@@ -29,17 +26,11 @@ Theorem list_loop : forall {A : Set} {x : A} {l : list A}, (x::l) <> l.
     apply (IHl _ H).
 Qed.
 
-
-
-
-
 (* ####################################################### *)
 (** ** Lexical Analysis *)
 
 Open Scope nat_scope.
 Open Scope char_scope.
-
-
 
 (* comparisons *)
 
@@ -49,30 +40,18 @@ Definition eq_ascii (c d : ascii) : bool :=
 Notation "x '<=?' y" := (ble_nat x y)
   (at level 70, no associativity) : nat_scope.
 
-
-
 (* character class helpers *)
 
 Definition never : ascii -> bool :=
   fun _ => false.
 
-
-
 Definition check_aux (to : ascii) (continuation : ascii -> bool) : ascii -> bool :=
   fun c =>
     (orb (eq_ascii c to) (continuation c)).
 
-Eval compute in (check_aux "a" (check_aux "b" (check_aux "c" never))) "c".
-
-
-
 Notation "{{ a , .. , b }}" := (check_aux a .. (check_aux b never)  .. ) (at level 0). 
 
 Notation "a 'isin' f" := (f a) (at level 1, only parsing).
-
-Eval compute in {{ "a", "b", "c"}} "b".
-
-
 
 Definition ascii_sequence (from to : ascii) : ascii -> bool :=
   let (a,c) := (nat_of_ascii from, nat_of_ascii to) in
@@ -87,8 +66,6 @@ Example ascii_sequence_decimal_works :
     ("0" isin num) && ("4" isin num) && ("9" isin num)
     && (negb (("a" isin num) || ("}" isin num) )) = true.
 Proof.  reflexivity.  Qed.
-
-
 
 (* some character classes *)
 
@@ -117,9 +94,6 @@ Definition isHexDigit (c : ascii) : bool :=
 
 Module PDF.
 
-Parameter Zpos0 : Set.
-
-
 Inductive Numeric : Set :=
   | Integer : Z -> Numeric
   | Float : Q -> Numeric.
@@ -138,10 +112,6 @@ Inductive PDFObject : Set :=
 
 End PDF.
 
-
-
-
-
 (* ####################################################### *)
 (** ** option type *)
 
@@ -152,10 +122,6 @@ Inductive optionE (X:Type) : Type :=
 
 Implicit Arguments SomeE [[X]].
 Implicit Arguments NoneE [[X]].
-
-
-
-
 
 (* ####################################################### *)
 (** ** string <--> list *)
@@ -168,10 +134,6 @@ Fixpoint list_of_string (s : string) : list ascii :=
 
 Definition string_of_list (xs : list ascii) : string :=
   fold_right String EmptyString xs.
-
-
-
-
 
 (* ####################################################### *)
 (** ** length measure for lists *)
@@ -224,10 +186,6 @@ Section length_measure.
   Unset Implicit Arguments.
 
 End length_measure.
-
-
-
-
 
 (* ####################################################### *)
 (** ** truer sublist *)
@@ -324,17 +282,12 @@ Section true_sublist.
   Unset Implicit Arguments.
 End true_sublist.
 
-
-
-
-
 (* ####################################################### *)
 (** ** parser *)
 
 Definition parser (T : Type) :=
   forall l : list ascii,
     optionE (T * {l' : list ascii | sublist l' l}).
-
 
 Lemma parser_nil_none : forall t (p : parser t), exists err, p [] = NoneE err.
 Proof.
@@ -356,8 +309,6 @@ Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) :
                 end
     end.
 
-
-
 Definition match_any : parser ascii := parse_one_character (fun t => SomeE (fst t)).
 
 Theorem match_any_works :
@@ -367,8 +318,6 @@ Theorem match_any_works :
 Proof.
   intros. unfold match_any. unfold parse_one_character. simpl. reflexivity.
 Qed.
-
-
 
 Function many_helper (T:Set) (p : parser T) (acc : list T) (xs : list ascii)
     {measure List.length xs } :
@@ -392,8 +341,6 @@ Hint Rewrite many_helper_equation : pdfparser.
 
 Definition many {T:Set} (p : parser T) : parser (list T) :=
   fun xs => many_helper T p [] xs.
-
-
 
 Theorem many_helper_works :
   forall l acc : list ascii,
@@ -426,8 +373,6 @@ Theorem many_works :
   (l =  [] -> exists e, many match_any l = NoneE e) /\
   (l <> [] -> exists e, many match_any l = SomeE (l,e)).
 Proof.  unfold many; intros. apply many_helper_works.  Qed.
-
-
 
 Definition match_one_char_with_predicate (p : ascii -> bool) : parser ascii :=
   parse_one_character (fun t => if p (fst t) then SomeE (fst t) else NoneE "predicate false").
@@ -586,8 +531,6 @@ Example parse_boolean3 :
     parse_boolean (list_of_string "unsinn"%string) = NoneE e.
 Proof.  cbv; eexists; reflexivity.  Qed.
 
-
-
 Definition parse_unsigned_integer : parser Z :=
   fun xs =>
     match match_integer xs with
@@ -609,7 +552,6 @@ Definition parse_integer : parser Z :=
       | SomeE ((NoneE _, val), xs') => SomeE(val, xs')
       | NoneE err => NoneE err
     end.
-
 
 Example parse_integer1 :
   exists e,
