@@ -16,8 +16,6 @@ Open Scope list_scope.
 (* ####################################################### *)
 (** ** Helpers *)
 
-Check tail.
-
 Theorem list_loop : forall {A : Set} {x : A} {l : list A}, (x::l) <> l.
   intros; generalize dependent x.
   induction l; intros x C.
@@ -94,6 +92,8 @@ Definition isHexDigit (c : ascii) : bool :=
 
 Module PDF.
 
+Parameter Zpos0 : Set.
+
 Inductive Numeric : Set :=
   | Integer : Z -> Numeric
   | Float : Q -> Numeric.
@@ -122,6 +122,23 @@ Inductive optionE (X:Type) : Type :=
 
 Implicit Arguments SomeE [[X]].
 Implicit Arguments NoneE [[X]].
+
+(* Some syntactic sugar to make writing nested match-expressions on
+   optionE more convenient. *)
+
+Notation "'DO' ( x , y ) <== e1 ;; e2" 
+   := (match e1 with
+         | SomeE (x,y) => e2
+         | NoneE err => NoneE err
+       end)
+   (right associativity, at level 60).
+
+Notation "'DO' ( x , y ) <-- e1 ;; e2 'OR' e3" 
+   := (match e1 with
+         | SomeE (x,y) => e2
+         | NoneE err => e3
+       end)
+   (right associativity, at level 60, e2 at next level). 
 
 (* ####################################################### *)
 (** ** string <--> list *)
@@ -507,6 +524,8 @@ Example match_string1 :
     match_string "foo"%string (list_of_string "foobar"%string) = SomeE ("foo"%string, e).
 Proof.  cbv; eexists; reflexivity.  Qed.
 
+(* bis hier *)
+
 Definition parse_boolean : parser PDF.PDFObject :=
   fun xs =>
     match alternative (match_string "true") (match_string "false") xs with
@@ -716,23 +735,6 @@ Proof. reflexivity. Qed.
 (* ####################################################### *)
 (** *** Options with Errors *)
 
-
-(* Some syntactic sugar to make writing nested match-expressions on
-   optionE more convenient. *)
-
-Notation "'DO' ( x , y ) <== e1 ;; e2" 
-   := (match e1 with
-         | SomeE (x,y) => e2
-         | NoneE err => NoneE err
-       end)
-   (right associativity, at level 60).
-
-Notation "'DO' ( x , y ) <-- e1 ;; e2 'OR' e3" 
-   := (match e1 with
-         | SomeE (x,y) => e2
-         | NoneE err => e3
-       end)
-   (right associativity, at level 60, e2 at next level). 
 
 (* ####################################################### *)
 (** *** Symbol Table *)
