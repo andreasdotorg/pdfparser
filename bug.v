@@ -39,7 +39,7 @@ Program Definition skip_many_even : decreasing_nat :=
     | O    => NoneE
     | S ys => if evenb ys then
              _ ys (f ys)  (* generating obligation and solving manually triggers bug *)
-             (*skip_char ys (f ys) *)  (* replace above line with this to make it work *)
+             (*skip_step ys (f ys) *)  (* replace above line with this to make it work *)
            else
              match ys with
              | O    => NoneE
@@ -48,7 +48,7 @@ Program Definition skip_many_even : decreasing_nat :=
     end.
 
 Next Obligation.
-  apply skip_char. assumption.
+  apply skip_step. assumption.
 Qed.
 
 Eval compute in match_hex 23.
@@ -58,15 +58,8 @@ Eval compute in match_hex 22.
 
 ## OUTPUT ##
 
-manual obligation solving
-  barfs on 'Qed.' with error
     Error: Anomaly: Uncaught exception Type_errors.TypeError(_, _).
            Please report.
-
-automatic obligation solving via Hint / Underscore
-OR
-replace function-position underscore with 'skip_char'
-  works
 
 *)
                         
