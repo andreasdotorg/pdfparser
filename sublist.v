@@ -60,7 +60,7 @@ Section length_measure.
 
     Hint Unfold lt_length.
     Hint Resolve lt_length_trans lt_length_tail lt_length_tails lt_length_cons
-                    lt_length_cons_cons : pdfparser.
+                    lt_length_cons_cons. (* : pdfparser. *)
 
   End lt_length_order.
   Unset Implicit Arguments.
@@ -78,8 +78,6 @@ Section true_sublist.
   Inductive sublist : list A -> list A -> Prop :=
   | sl_tail : forall (c : A) l, sublist l (c::l)
   | sl_cons : forall (c : A) l' l, sublist l' l -> sublist l' (c::l).
-
-  Hint Constructors sublist.
 
   Section sublist_order.
 
@@ -145,8 +143,6 @@ Section true_sublist.
         constructor; apply (IHsublist _ H0).
     Qed.
 
-    Hint Resolve sublist__lt_length sublist_tails sublist_trans : sublist pdfparser.
-
   End sublist_order.
 
   (* additional pseudo-constructor *)
@@ -157,8 +153,9 @@ Section true_sublist.
       apply sublist_tails in H. constructor; assumption.
   Qed.
 
-  Hint Resolve sl_minus : core.
-
   Unset Implicit Arguments.
 End true_sublist.
 
+Hint Constructors sublist.
+Hint Resolve sublist__lt_length sublist_tails sublist_trans. (* : sublist pdfparser. *)
+Hint Resolve sl_minus.

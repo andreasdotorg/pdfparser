@@ -53,7 +53,7 @@ Proof.
     exists s. reflexivity.
 Qed.
 
-Hint Resolve parser_nil_none : pdfparser.
+Hint Resolve parser_nil_none. (* : pdfparser. *)
 
 Definition parse_one_character {T : Set} (f : ascii*(list ascii) -> optionE T) : parser T :=
   fun xs => match xs with
@@ -92,7 +92,7 @@ Proof.
   assumption.
 Defined.
 
-Hint Rewrite many_helper_equation : pdfparser.
+Hint Rewrite many_helper_equation. (* : pdfparser. *)
 
 Definition many {T:Set} (p : parser T) : parser (list T) :=
   fun xs => many_helper T p [] xs.
@@ -250,6 +250,19 @@ Example match_string1 :
   exists e,
     match_string "foo"%string (list_of_string "foobar"%string) = SomeE ("foo"%string, e).
 Proof.  cbv; eexists; reflexivity.  Qed.
+
+(* Hilfsbeweis(funktionen) *)
+
+Definition pf_skipped_one_character {c1 : ascii} {l0 : list ascii}
+    (pf : optionE (ascii * {l' : list ascii | sublist l' l0}))
+    : optionE (ascii * {l' : list ascii | sublist l' (c1 :: l0)}).
+Proof.
+  destruct pf.
+    destruct p. destruct s. repeat constructor. econstructor. apply sl_tail.
+    exact (NoneE s).
+Defined.
+
+
 
 (* bis hier *)
 
