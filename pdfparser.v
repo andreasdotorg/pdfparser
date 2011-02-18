@@ -189,12 +189,6 @@ Program Definition match_hex : parser ascii :=
            else
              NoneE "no hex digits found"
     end.
-Next Obligation.
-  apply sl_cons. apply sl_tail.
-Qed.
-Next Obligation.
-  apply sl_tail.
-Qed.
 
 Definition parse_hex_string : parser string :=
   fun xs =>
