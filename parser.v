@@ -253,14 +253,13 @@ Proof.  cbv; eexists; reflexivity.  Qed.
 
 (* Hilfsbeweis(funktionen) *)
 
-Definition pf_skipped_one_character {c1 : ascii} {l0 : list ascii}
+Program Definition pf_skipped_one_character {c1 : ascii} {l0 : list ascii}
     (pf : optionE (ascii * {l' : list ascii | sublist l' l0}))
-    : optionE (ascii * {l' : list ascii | sublist l' (c1 :: l0)}).
-Proof.
-  destruct pf.
-    destruct p. destruct s. repeat constructor. econstructor. apply sl_tail.
-    exact (NoneE s).
-Defined.
+    : optionE (ascii * {l' : list ascii | sublist l' (c1 :: l0)}) := 
+  match pf with
+    | SomeE ((c,exist l _)) => SomeE (c,exist _ l _)
+    | NoneE err => NoneE err
+  end.
 
 
 

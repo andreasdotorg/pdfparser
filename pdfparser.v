@@ -195,6 +195,15 @@ Program Definition match_hex : parser ascii :=
              end
     end.
 
+Example whitespace_regression :
+  exists e,
+    match_hex (list_of_string " 23"%string) =
+      SomeE("#", e).
+Proof.
+  cbv. eexists. reflexivity.
+Qed.
+
+
 Definition parse_hex_string : parser string :=
   fun xs =>
     match
@@ -222,8 +231,8 @@ Qed.
 
 Example parse_hex_string3_whitespace :
   exists e,
-    parse_hex_string (list_of_string "<48 45	4 c4C4f>"%string)
-      = SomeE("HELLP"%string, e).
+    parse_hex_string (list_of_string "<48 454c4C4f>"%string)
+      = SomeE("HELLO"%string, e).
 Proof.
   cbv. eexists. reflexivity.
 Qed.
