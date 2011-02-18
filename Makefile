@@ -9,4 +9,4 @@ pdfparser.vo : SfLib.vo parser.vo pdftype.vo
 all: pdfparser.vo
 
 clean:
-	rm *.vo *.glob *~
+	-rm *.vo *.glob *~
