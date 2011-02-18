@@ -174,27 +174,26 @@ Definition ascii_of_Z (z : Z) :=
   ascii_of_nat (Zabs_nat z).
 
 Program Definition match_hex : parser ascii :=
-  fun xs =>
+  fix f xs :=
     match xs with
       | []        => NoneE "end of stream while parsing hex"
-      | c::[]     => NoneE "end of stream while parsing hex"
-      | c1::c2::l 
-        => if isHexDigit c1 then
-             if isHexDigit c2 then
-               SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)),
-                      exist _ l _)
-             else
-               SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
-                      exist _ (c2::l) _)
+      | c1::l0 =>
+           if isWhite c1 then
+             @pf_skipped_one_character c1 l0 (f l0)
            else
-             NoneE "no hex digits found"
+             match l0 with
+             | [] => NoneE "end of stream while parsing hex"
+             | c2::l => if isHexDigit c1 then
+               if isHexDigit c2 then
+                 SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)),
+                        exist _ l _)
+               else
+                 SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16),
+                        exist _ (c2::l) _)
+             else
+               NoneE "no hex digits found"
+             end
     end.
-Next Obligation.
-  apply sl_cons. apply sl_tail.
-Qed.
-Next Obligation.
-  apply sl_tail.
-Qed.
 
 Definition parse_hex_string : parser string :=
   fun xs =>
@@ -221,6 +220,13 @@ Proof.
   cbv. eexists. reflexivity.
 Qed.
 
+Example parse_hex_string3_whitespace :
+  exists e,
+    parse_hex_string (list_of_string "<48 45	4 c4C4f>"%string)
+      = SomeE("HELLP"%string, e).
+Proof.
+  cbv. eexists. reflexivity.
+Qed.
 
 (*
 boolean,
