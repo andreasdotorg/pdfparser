@@ -32,7 +32,7 @@ Definition check_aux (to : ascii) (continuation : ascii -> bool) : ascii -> bool
   fun c =>
     (orb (eq_ascii c to) (continuation c)).
 
-Notation "{{ a , .. , b }}" := (check_aux a .. (check_aux b never)  .. ) (at level 0). 
+Notation "{{ a , .. , b }}" := (check_aux a .. (check_aux b never)  .. ) (at level 0).
 
 Notation "a 'isin' f" := (f a) (at level 1, only parsing).
 
@@ -78,9 +78,9 @@ Definition match_integer := many match_digit.
 
 Definition Z_of_ascii (d : ascii) := Z_of_nat (nat_of_ascii d).
 
-Definition Z_of_digit (d : ascii) := ((Z_of_ascii d) - 48)%Z. 
+Definition Z_of_digit (d : ascii) := ((Z_of_ascii d) - 48)%Z.
 
-Definition match_sign := 
+Definition match_sign :=
   match_one_char_with_predicate (fun x => x isin {{"-", "+"}})%char.
 
 
@@ -113,11 +113,11 @@ Definition parse_unsigned_integer : parser Z :=
   fun xs =>
     match match_integer xs with
       | NoneE e => NoneE "No digits found while parsing integer"
-      | SomeE (digits, xs') 
-        => SomeE (fold_left 
+      | SomeE (digits, xs')
+        => SomeE (fold_left
                     (fun a b => a * 10 + b)
                     (map Z_of_digit digits)
-                    0, 
+                    0,
                   xs')%Z
     end.
 
@@ -207,7 +207,7 @@ Definition parse_hex_string : parser string :=
 
 Example parse_hex_string1 :
   exists e,
-    parse_hex_string (list_of_string "<48454c4C4f>"%string) 
+    parse_hex_string (list_of_string "<48454c4C4f>"%string)
       = SomeE("HELLO"%string, e).
 Proof.
   cbv. eexists. reflexivity.
@@ -215,7 +215,7 @@ Qed.
 
 Example parse_hex_string2_trailing_zero :
   exists e,
-    parse_hex_string (list_of_string "<48454c4C5>"%string) 
+    parse_hex_string (list_of_string "<48454c4C5>"%string)
       = SomeE("HELLP"%string, e).
 Proof.
   cbv. eexists. reflexivity.
