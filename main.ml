@@ -24,6 +24,9 @@ let string_of_list l =
   in
     string_of_list_aux l 0;;
 
+parse_integer (list_of_string "1234567890123456789012345678901234567890")
+
+(*
 let infile = open_in "foo.input" in
 let data = read_all infile in
 begin
@@ -36,3 +39,4 @@ begin
                  end
   | NoneE err -> Print.printf p"%s\n" (string_of_list err)
 end
+*)

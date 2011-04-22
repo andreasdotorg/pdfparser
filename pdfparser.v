@@ -76,14 +76,16 @@ Definition match_digit := match_one_char_with_predicate isDigit.
 
 Definition match_integer := many match_digit.
 
+Definition match_white := match_one_char_with_predicate isWhite.
+
+Definition match_hex_digit := match_one_char_with_predicate isHexDigit.
+
 Definition Z_of_ascii (d : ascii) := Z_of_nat (nat_of_ascii d).
 
 Definition Z_of_digit (d : ascii) := ((Z_of_ascii d) - 48)%Z.
 
 Definition match_sign :=
   match_one_char_with_predicate (fun x => x isin {{"-", "+"}})%char.
-
-
 
 Definition parse_boolean : parser PDF.PDFObject :=
   fun xs =>
@@ -256,4 +258,4 @@ Require Import ExtrOcamlNatInt.
 Require Import ExtrOcamlZInt.
 Require Import ExtrOcamlString.
 
-Extraction "parser.ml" parse_hex_string list_of_string.
+Extraction "parser.ml" parse_hex_string parse_integer.

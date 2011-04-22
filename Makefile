@@ -9,9 +9,9 @@ sublist.vo: SfLib.vo
 pdfparser.vo: SfLib.vo parser.vo pdftype.vo
 parser.ml: pdfparser.vo
 parser.mli: pdfparser.vo
-allparser.ml: parser.ml preamble.ml
+allparser.ml: parser.ml preamble.ml pdfparser.vo
 	cat preamble.ml parser.ml > allparser.ml
-allparser.mli: parser.mli ipreamble.ml
+allparser.mli: parser.mli ipreamble.ml pdfparser.vo
 	cat ipreamble.ml parser.mli > allparser.mli
 allparser.cmi: allparser.mli
 	ocamlfind ocamlc -package batteries -package batteries.syntax -syntax camlp4o -c allparser.mli
