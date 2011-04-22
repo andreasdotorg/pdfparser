@@ -1,3 +1,9 @@
 *~
 *.glob
 *.vo
+*.cmi
+*.cmo
+parser.ml
+parser.mli
+allparser.ml
+allparser.mli

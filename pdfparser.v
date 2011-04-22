@@ -237,6 +237,8 @@ Proof.
   cbv. eexists. reflexivity.
 Qed.
 
+
+
 (*
 boolean,
 integer,
@@ -249,3 +251,9 @@ stream,
 null
 indirect object
 *)
+
+Require Import ExtrOcamlNatInt.
+Require Import ExtrOcamlZInt.
+Require Import ExtrOcamlString.
+
+Extraction "parser.ml" parse_hex_string list_of_string.
