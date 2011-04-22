@@ -25,6 +25,21 @@ Inductive optionE (X:Type) : Type :=
 Implicit Arguments SomeE [[X]].
 Implicit Arguments NoneE [[X]].
 
+Notation "'DO' ( x , y ) <== e1 ;; e2" 
+   := (match e1 with
+         | SomeE (x,y) => e2
+         | NoneE err => NoneE err
+       end)
+   (right associativity, at level 60).
+
+Notation "'DO' ( x , y ) <-- e1 ;; e2 'OR' e3" 
+   := (match e1 with
+         | SomeE (x,y) => e2
+         | NoneE err => e3
+       end)
+   (right associativity, at level 60, e2 at next level). 
+
+
 (* ####################################################### *)
 (** ** string <--> list *)
 
