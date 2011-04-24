@@ -144,6 +144,38 @@ Theorem many_works :
   (l <> [] -> exists e, many match_any l = SomeE (l,e)).
 Proof.  unfold many; intros. apply many_helper_works.  Qed.
 
+Fixpoint some_helper {T:Set} (n : nat) (acc : list T) (p : parser T) (xs : list ascii):
+  optionE (list T * {xs' : list ascii | sublist xs' xs}) :=
+  match n with
+    | 0   => NoneE "Empty some match"
+(*
+    | 1   => match p xs with
+               | NoneE err              => NoneE err
+               | SomeE (t, exist xs' H) => SomeE ((rev (t::acc)), exist _ xs' H)
+             end *)
+    | (S n') => match p xs with
+                  | NoneE err                => NoneE err
+                  | SomeE (t, exist xs' H)   =>
+                    match n with
+                      | 1 => SomeE ((rev (t::acc)), exist _ xs' H)
+                      | _ 
+                        => match some_helper n' (t::acc) p xs' with
+                             | NoneE err => NoneE err
+                             | SomeE (acc', exist xs'' H') => SomeE (acc', exist _ xs'' (sublist_trans H' H))
+                           end
+                    end
+                end
+  end.
+
+Definition some {T:Set} (n : nat) (p : parser T) : parser (list T) :=
+  fun xs => some_helper n [] p xs.
+
+Example some_ex1 :
+  exists e,
+    some 3 match_any (list_of_string "foobar"%string) = SomeE ((list_of_string "foo"%string), e).
+Proof.  cbv; eexists; reflexivity.  Qed.
+
+
 Definition match_one_char_with_predicate (p : ascii -> bool) : parser ascii :=
   parse_one_character (fun t => if p (fst t) then SomeE (fst t) else NoneE "predicate false").
 
