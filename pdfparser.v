@@ -265,19 +265,128 @@ Definition opt_ws {T:Set} (p : parser T) : parser (T) :=
   fun xs =>
     DO (val, xs') <== sequential_leftopt (many match_white) p xs ;; SomeE ((snd val), xs').
 
-Check sig.
-
 Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 
   match s with | exist a b => a end.
 
 Definition find_xref_offset (xs : list ascii) :=
   let rxs := rev (list_last_n xs 100) in
-    DO (_, rxs')    <== opt_ws (match_string "FOE%%"%string) rxs ;;
+    DO (_, rxs')    <== opt_ws (match_string (rev_string "%%EOF"%string)) rxs ;;
     DO (val, rxs'') <== opt_ws (many match_digit) (lift_base rxs') ;;
-    DO (_, _)       <== opt_ws (match_string "ferxtrats"%string) (lift_base rxs'') ;;
-    SomeE (rev val).
+    DO (_, _)       <== opt_ws (match_string (rev_string "startxref"%string)) (lift_base rxs'') ;;
+    DO (val',_)     <== parse_integer (rev val) ;;
+    SomeE val'.
+
+Inductive Xref_entry : Set :=
+  | InUse : nat -> nat -> Xref_entry
+  | Free : nat -> nat -> Xref_entry.
+
+Hint Resolve sublist_trans.
+
+Program Definition parse_xref_entry : parser Xref_entry :=
+  fun xs =>
+  DO (offset, xs')      <== opt_ws (some 10 match_digit) xs ;;
+  DO (generation, xs'') <== opt_ws (some 5 match_digit) (lift_base xs') ;;
+  DO (type, xs''')      <== opt_ws match_any (lift_base xs'') ;;
+  DO (offset', _)       <== parse_integer offset ;;
+  DO (generation', _)   <== parse_integer generation ;;
+  match type with
+    | "n" => SomeE (InUse (Zabs_nat offset') (Zabs_nat generation'), exist _ (lift_base xs''') _)
+    | "f" => SomeE (Free (Zabs_nat offset') (Zabs_nat generation'), exist _ (lift_base xs''') _)
+    | _   => NoneE "Invalid xref entry type"
+  end.
+Next Obligation.
+  eauto.
+Qed.
+Next Obligation.
+  eauto.
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+Next Obligation.
+  split; unfold not; intro H'; inversion H'. 
+Qed.
+
+Program Definition parse_xref_table_section : parser (nat*list Xref_entry) :=
+  fun xs =>
+  DO (startoffset, xs') <== opt_ws parse_integer xs ;;
+  DO (entrynum, xs'')   <== opt_ws parse_integer (lift_base xs') ;;
+  DO (entries, xs''')   <== some (Zabs_nat entrynum) parse_xref_entry (lift_base xs'') ;;
+  SomeE (((Zabs_nat startoffset), entries), xs''').
+Next Obligation. eauto. Qed.
+
+Inductive Xref_table_entry : Set :=
+  | table_entry : nat -> Xref_entry -> Xref_table_entry.
+
+Inductive Xref_table : Set :=
+  | empty_table : Xref_table
+  | next_entry : Xref_table_entry -> Xref_table -> Xref_table.
+
+Fixpoint build_xref_table_aux base entries table :=
+  match entries with
+    | []   => table
+    | h::t => build_xref_table_aux (S base) t (next_entry (table_entry base h) table)
+  end.
+
+Fixpoint build_xref_table sections table :=
+  match sections with
+    | []                    => table
+    | (base, entries)::rest => build_xref_table rest (build_xref_table_aux base entries table)
+  end.
+
+Definition parse_xref_table (xs : list ascii) :=
+  DO (_, xs')         <== opt_ws (match_string "xref"%string) xs ;;
+  DO (sections, xs'') <== opt_ws (many parse_xref_table_section) (lift_base xs') ;;
+  SomeE (build_xref_table sections empty_table).
+
+Definition find_and_parse_xref_table (xs : list ascii) :=
+  match find_xref_offset xs with
+    | NoneE err => NoneE err
+    | SomeE offset
+      => match skip_to_offset xs (Zabs_nat offset) with
+           | NoneE err => NoneE err
+           | SomeE xs' => parse_xref_table xs'
+         end
+  end.
+
+Definition main (xs : list ascii) :=
+  match find_and_parse_xref_table xs with
+    | NoneE err => NoneE ("Error: "%string ++ err)
+    | SomeE _   => SomeE "Success!"%string
+  end.
 
 (*
+Eval compute in parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string).
+
+Eval compute in parse_xref_entry (list_of_string "0000000005 00002 f "%string).
+
 Definition find_xref_offset (xs : list ascii) :=
   let rxs := rev (list_last_n xs 100) in
     match opt_ws (match_string "FOE%%"%string) rxs with
@@ -292,7 +401,6 @@ Definition find_xref_offset (xs : list ascii) :=
                end
            end
     end.
-*)
 
 Example find_xref_offset_ex1 :
   find_xref_offset (list_of_string "foobar  blabla  startxref  23  %%EOF  "%string)
@@ -300,6 +408,7 @@ Example find_xref_offset_ex1 :
 Proof.
   cbv. reflexivity.
 Qed.
+*)
 
 (*
 boolean,
@@ -318,4 +427,4 @@ Require Import ExtrOcamlNatInt.
 Require Import ExtrOcamlZInt.
 Require Import ExtrOcamlString.
 
-Extraction "parser.ml" parse_hex_string parse_integer find_xref_offset.
+Extraction "parser.ml" main.

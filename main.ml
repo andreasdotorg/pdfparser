@@ -29,7 +29,7 @@ let infile = open_in (List.at args 0) in
 let data = read_all infile in
 begin
   close_in infile;
-  match find_xref_offset (list_of_string data) with
+  match main (list_of_string data) with
   | SomeE s   -> (* let outfile = open_out (List.at args 1) in
                  begin
                    nwrite outfile (string_of_list s);
