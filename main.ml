@@ -24,19 +24,17 @@ let string_of_list l =
   in
     string_of_list_aux l 0;;
 
-parse_integer (list_of_string "1234567890123456789012345678901234567890")
-
-(*
-let infile = open_in "foo.input" in
+let args = Arg.handle [] in
+let infile = open_in (List.at args 0) in
 let data = read_all infile in
 begin
   close_in infile;
-  match parse_hex_string (list_of_string data) with
-  | SomeE s   -> let outfile = open_out "foo.output" in
+  match find_xref_offset (list_of_string data) with
+  | SomeE s   -> (* let outfile = open_out (List.at args 1) in
                  begin
-                   nwrite outfile (string_of_list (fst s));
+                   nwrite outfile (string_of_list s);
                    close_out outfile
-                 end
+                 end*)
+                 Print.printf p"%s\n" (string_of_list s)
   | NoneE err -> Print.printf p"%s\n" (string_of_list err)
 end
-*)

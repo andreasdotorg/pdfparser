@@ -239,7 +239,67 @@ Proof.
   cbv. eexists. reflexivity.
 Qed.
 
+Fixpoint skip_to_offset {T} (s : list T) (i : nat) :=
+  match i with
+    | 0 => SomeE s
+    | (S n) => match s with
+                 | []   => NoneE "Illegal offset"
+                 | h::t => skip_to_offset t n
+               end
+  end.
 
+Definition list_last_n {T} (xs : list T) (i : nat) :=
+  (fix walker xs ys i :=
+    match xs with
+      | []     => ys
+      | x::xs' => match i with
+                    | 0      => walker xs' (tail ys) 0
+                    | (S i') => walker xs' ys i'
+                  end
+    end) xs xs i.
+
+Definition rev_string (s : string) :=
+  string_of_list (rev (list_of_string s)).
+
+Definition opt_ws {T:Set} (p : parser T) : parser (T) :=
+  fun xs =>
+    DO (val, xs') <== sequential_leftopt (many match_white) p xs ;; SomeE ((snd val), xs').
+
+Check sig.
+
+Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 
+  match s with | exist a b => a end.
+
+Definition find_xref_offset (xs : list ascii) :=
+  let rxs := rev (list_last_n xs 100) in
+    DO (_, rxs')    <== opt_ws (match_string "FOE%%"%string) rxs ;;
+    DO (val, rxs'') <== opt_ws (many match_digit) (lift_base rxs') ;;
+    DO (_, _)       <== opt_ws (match_string "ferxtrats"%string) (lift_base rxs'') ;;
+    SomeE (rev val).
+
+(*
+Definition find_xref_offset (xs : list ascii) :=
+  let rxs := rev (list_last_n xs 100) in
+    match opt_ws (match_string "FOE%%"%string) rxs with
+      | NoneE err => NoneE ("Trailing %%EOF not found: "%string ++ err)
+      | SomeE (_, exist rxs' _) 
+        => match opt_ws (many match_digit) rxs' with
+          | NoneE err => NoneE ("Invalid format for xref offset: "%string ++ err)
+          | SomeE (val, exist rxs'' _) 
+            => match opt_ws (match_string "ferxtrats"%string) rxs'' with
+              | NoneE err    => NoneE ("startxref keyword not found: "%string ++ err)
+              | SomeE (_, _) => SomeE (rev val)
+               end
+           end
+    end.
+*)
+
+Example find_xref_offset_ex1 :
+  find_xref_offset (list_of_string "foobar  blabla  startxref  23  %%EOF  "%string)
+    = SomeE(list_of_string "23").
+Proof.
+  cbv. reflexivity.
+Qed.
 
 (*
 boolean,
@@ -258,4 +318,4 @@ Require Import ExtrOcamlNatInt.
 Require Import ExtrOcamlZInt.
 Require Import ExtrOcamlString.
 
-Extraction "parser.ml" parse_hex_string parse_integer.
+Extraction "parser.ml" parse_hex_string parse_integer find_xref_offset.
