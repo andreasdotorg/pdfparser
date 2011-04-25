@@ -8,6 +8,8 @@ Require Import ZArith.
 Require Import QArith.
 
 Require Import Recdef.
+Require Import Coq.Program.Basics.
+Require Import Coq.Program.Tactics.
 
 Require Import pdftype.
 Require Import sublist.
@@ -294,6 +296,13 @@ Inductive Xref_entry : Set :=
   | InUse : nat -> nat -> Xref_entry
   | Free : nat -> nat -> Xref_entry.
 
+Ltac xref_solver :=
+  try program_simpl;
+  try (split; unfold not; intro H'; inversion H'; fail);
+  try (eauto; fail).
+
+Local Obligation Tactic := xref_solver.
+
 Program Definition parse_xref_entry : parser Xref_entry :=
   fun xs =>
   DO (offset, xs')      <== opt_ws (some 10 match_digit) xs ;;
@@ -307,47 +316,7 @@ Program Definition parse_xref_entry : parser Xref_entry :=
     | _   => NoneE "Invalid xref entry type"
   end.
 (* this should solve all obligations, but doesn't *)
-Solve Obligations using program_simpl; (eauto || split; unfold not; intro H'; inversion H').
-
-Next Obligation.
-  eauto.
-Qed.
-Next Obligation.
-  eauto.
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
-Next Obligation.
-  split; unfold not; intro H'; inversion H'. 
-Qed.
+(* now already solved ;-) *)
 
 Program Definition parse_xref_table_section : parser (nat*list Xref_entry) :=
   fun xs =>
@@ -355,7 +324,6 @@ Program Definition parse_xref_table_section : parser (nat*list Xref_entry) :=
   DO (entrynum, xs'')   <== opt_ws parse_nat (lift_base xs') ;;
   DO (entries, xs''')   <== some entrynum parse_xref_entry (lift_base xs'') ;;
   SomeE ((startoffset, entries), xs''').
-Next Obligation. eauto. Qed.
 
 Inductive Xref_table_entry : Set :=
   | table_entry : nat -> Xref_entry -> Xref_table_entry.
