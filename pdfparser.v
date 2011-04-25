@@ -328,14 +328,16 @@ Program Definition parse_xref_table_section : parser (nat*list Xref_entry) :=
 Inductive Xref_table_entry : Set :=
   | table_entry : nat -> Xref_entry -> Xref_table_entry.
 
+(*
 Inductive Xref_table : Set :=
   | empty_table : Xref_table
   | next_entry : Xref_table_entry -> Xref_table -> Xref_table.
+*)
 
 Fixpoint build_xref_table_aux base entries table :=
   match entries with
     | []   => table
-    | h::t => build_xref_table_aux (S base) t (next_entry (table_entry base h) table)
+    | h::t => build_xref_table_aux (S base) t ((table_entry base h)::table)
   end.
 
 Fixpoint build_xref_table sections table :=
@@ -347,7 +349,7 @@ Fixpoint build_xref_table sections table :=
 Definition parse_xref_table (xs : list ascii) :=
   DO (_, xs')         <== opt_ws (match_string "xref"%string) xs ;;
   DO (sections, xs'') <== opt_ws (many parse_xref_table_section) (lift_base xs') ;;
-  SomeE (build_xref_table sections empty_table).
+  SomeE (build_xref_table sections []).
 
 Definition find_and_parse_xref_table (xs : list ascii) :=
   match find_xref_offset xs with
@@ -365,9 +367,51 @@ Definition main (xs : list ascii) :=
     | SomeE _   => SomeE "Success!"%string
   end.
 
-(*
 Eval compute in parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string).
 
+Fixpoint remove_free_from_xref x : list Xref_table_entry :=
+  match x with
+    | [] => []
+    | ((table_entry _ (InUse _ _)) as e)::x'
+      => e::(remove_free_from_xref x')
+    | (table_entry _ (Free _ _))::x'
+      => remove_free_from_xref x'
+  end.
+
+Eval compute in match parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string) with | NoneE e => NoneE e | SomeE table => SomeE (remove_free_from_xref table) end.
+
+Require Import Coq.Sorting.Sorting.
+Require Import Orders.
+Require Import Arith.
+
+Open Scope bool_scope.
+
+Local Coercion is_true : bool >-> Sortclass.
+
+Module TableEntryOrder <: TotalLeBool.
+  Definition t := Xref_table_entry.
+  
+  Definition leb x y :=
+    match x, y with
+    | (table_entry x' _),(table_entry y' _) 
+      => x' <=? y'
+    end.
+  Check leb.
+(*  Infix "<=?" := leb (at level 35). *)
+  Theorem leb_total : forall a1 a2, leb a1 a2 \/ leb a2 a1.
+    intros. destruct a1; destruct a2. unfold leb. 
+    generalize dependent n0.
+    induction n; destruct n0; simpl; auto.
+  Qed.
+End TableEntryOrder.
+
+Module Import TableEntrySort := Sort TableEntryOrder.
+
+Eval compute in match parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string) with | NoneE e => NoneE e | SomeE table => SomeE (sort (remove_free_from_xref table)) end.
+
+
+
+(*
 Eval compute in parse_xref_entry (list_of_string "0000000005 00002 f "%string).
 
 Definition find_xref_offset (xs : list ascii) :=
@@ -409,5 +453,8 @@ indirect object
 Require Import ExtrOcamlNatInt.
 Require Import ExtrOcamlZInt.
 Require Import ExtrOcamlString.
+
+
+
 
 Extraction "parser.ml" main.
