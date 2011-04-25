@@ -84,6 +84,8 @@ Definition Z_of_ascii (d : ascii) := Z_of_nat (nat_of_ascii d).
 
 Definition Z_of_digit (d : ascii) := ((Z_of_ascii d) - 48)%Z.
 
+Definition nat_of_digit (d : ascii) := (nat_of_ascii d) - 48.
+
 Definition match_sign :=
   match_one_char_with_predicate (fun x => x isin {{"-", "+"}})%char.
 
@@ -110,6 +112,18 @@ Example parse_boolean3 :
   exists e,
     parse_boolean (list_of_string "unsinn"%string) = NoneE e.
 Proof.  cbv; eexists; reflexivity.  Qed.
+
+Definition parse_nat : parser nat :=
+  fun xs =>
+    match match_integer xs with
+      | NoneE e => NoneE "No digits found while parsing integer"
+      | SomeE (digits, xs')
+        => SomeE (fold_left
+                    (fun a b => a * 10 + b)
+                    (map nat_of_digit digits)
+                    0,
+                  xs')
+    end.
 
 Definition parse_unsigned_integer : parser Z :=
   fun xs =>
@@ -273,27 +287,28 @@ Definition find_xref_offset (xs : list ascii) :=
     DO (_, rxs')    <== opt_ws (match_string (rev_string "%%EOF"%string)) rxs ;;
     DO (val, rxs'') <== opt_ws (many match_digit) (lift_base rxs') ;;
     DO (_, _)       <== opt_ws (match_string (rev_string "startxref"%string)) (lift_base rxs'') ;;
-    DO (val',_)     <== parse_integer (rev val) ;;
+    DO (val',_)     <== parse_nat (rev val) ;;
     SomeE val'.
 
 Inductive Xref_entry : Set :=
   | InUse : nat -> nat -> Xref_entry
   | Free : nat -> nat -> Xref_entry.
 
-Hint Resolve sublist_trans.
-
 Program Definition parse_xref_entry : parser Xref_entry :=
   fun xs =>
   DO (offset, xs')      <== opt_ws (some 10 match_digit) xs ;;
   DO (generation, xs'') <== opt_ws (some 5 match_digit) (lift_base xs') ;;
   DO (type, xs''')      <== opt_ws match_any (lift_base xs'') ;;
-  DO (offset', _)       <== parse_integer offset ;;
-  DO (generation', _)   <== parse_integer generation ;;
+  DO (offset', _)       <== parse_nat offset ;;
+  DO (generation', _)   <== parse_nat generation ;;
   match type with
-    | "n" => SomeE (InUse (Zabs_nat offset') (Zabs_nat generation'), exist _ (lift_base xs''') _)
-    | "f" => SomeE (Free (Zabs_nat offset') (Zabs_nat generation'), exist _ (lift_base xs''') _)
+    | "n" => SomeE (InUse offset' generation', exist _ (lift_base xs''') _)
+    | "f" => SomeE (Free offset' generation', exist _ (lift_base xs''') _)
     | _   => NoneE "Invalid xref entry type"
   end.
+(* this should solve all obligations, but doesn't *)
+Solve Obligations using program_simpl; (eauto || split; unfold not; intro H'; inversion H').
+
 Next Obligation.
   eauto.
 Qed.
@@ -336,10 +351,10 @@ Qed.
 
 Program Definition parse_xref_table_section : parser (nat*list Xref_entry) :=
   fun xs =>
-  DO (startoffset, xs') <== opt_ws parse_integer xs ;;
-  DO (entrynum, xs'')   <== opt_ws parse_integer (lift_base xs') ;;
-  DO (entries, xs''')   <== some (Zabs_nat entrynum) parse_xref_entry (lift_base xs'') ;;
-  SomeE (((Zabs_nat startoffset), entries), xs''').
+  DO (startoffset, xs') <== opt_ws parse_nat xs ;;
+  DO (entrynum, xs'')   <== opt_ws parse_nat (lift_base xs') ;;
+  DO (entries, xs''')   <== some entrynum parse_xref_entry (lift_base xs'') ;;
+  SomeE ((startoffset, entries), xs''').
 Next Obligation. eauto. Qed.
 
 Inductive Xref_table_entry : Set :=
@@ -370,7 +385,7 @@ Definition find_and_parse_xref_table (xs : list ascii) :=
   match find_xref_offset xs with
     | NoneE err => NoneE err
     | SomeE offset
-      => match skip_to_offset xs (Zabs_nat offset) with
+      => match skip_to_offset xs offset with
            | NoneE err => NoneE err
            | SomeE xs' => parse_xref_table xs'
          end
