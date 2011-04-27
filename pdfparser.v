@@ -292,6 +292,15 @@ Definition find_xref_offset (xs : list ascii) :=
     DO (val',_)     <== parse_nat (rev val) ;;
     SomeE val'.
 
+(*
+Example find_xref_offset_ex1 :
+  find_xref_offset (list_of_string "foobar  blabla  startxref  23  %%EOF  "%string)
+    = SomeE(list_of_string "23"%string).
+Proof.
+  cbv. reflexivity.
+Qed.
+*)
+
 Inductive Xref_entry : Set :=
   | InUse : nat -> nat -> Xref_entry
   | Free : nat -> nat -> Xref_entry.
@@ -315,8 +324,6 @@ Program Definition parse_xref_entry : parser Xref_entry :=
     | "f" => SomeE (Free offset' generation', exist _ (lift_base xs''') _)
     | _   => NoneE "Invalid xref entry type"
   end.
-(* this should solve all obligations, but doesn't *)
-(* now already solved ;-) *)
 
 Program Definition parse_xref_table_section : parser (nat*list Xref_entry) :=
   fun xs =>
@@ -351,6 +358,8 @@ Definition parse_xref_table (xs : list ascii) :=
   DO (sections, xs'') <== opt_ws (many parse_xref_table_section) (lift_base xs') ;;
   SomeE (build_xref_table sections []).
 
+(* Eval compute in parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string). *)
+
 Definition find_and_parse_xref_table (xs : list ascii) :=
   match find_xref_offset xs with
     | NoneE err => NoneE err
@@ -361,14 +370,6 @@ Definition find_and_parse_xref_table (xs : list ascii) :=
          end
   end.
 
-Definition main (xs : list ascii) :=
-  match find_and_parse_xref_table xs with
-    | NoneE err => NoneE ("Error: "%string ++ err)
-    | SomeE _   => SomeE "Success!"%string
-  end.
-
-Eval compute in parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string).
-
 Fixpoint remove_free_from_xref x : list Xref_table_entry :=
   match x with
     | [] => []
@@ -377,8 +378,6 @@ Fixpoint remove_free_from_xref x : list Xref_table_entry :=
     | (table_entry _ (Free _ _))::x'
       => remove_free_from_xref x'
   end.
-
-Eval compute in match parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string) with | NoneE e => NoneE e | SomeE table => SomeE (remove_free_from_xref table) end.
 
 Require Import Coq.Sorting.Sorting.
 Require Import Orders.
@@ -407,9 +406,42 @@ End TableEntryOrder.
 
 Module Import TableEntrySort := Sort TableEntryOrder.
 
-Eval compute in match parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string) with | NoneE e => NoneE e | SomeE table => SomeE (sort (remove_free_from_xref table)) end.
+Definition read_xref_table xs :=
+  match find_and_parse_xref_table xs with 
+    | NoneE e => NoneE ("Error parsing xref table: " ++ e)%string 
+    | SomeE table => SomeE (sort (remove_free_from_xref table)) 
+  end.
 
+Require Import NPeano.
 
+Check Nat.div_lt.
+
+Definition digit_of_nat n := ascii_of_nat (n + 48).
+
+Require Import Recdef.
+
+Function string_of_nat_aux n acc {measure (fun x => x) n} :=
+  match n with
+    | 0 => acc
+    | _ => string_of_nat_aux (n / 10) ((digit_of_nat (n mod 10))::acc)
+  end.
+Proof.
+  intros. apply Nat.div_lt; auto with arith.
+Defined.
+
+Definition string_of_nat n := 
+  match n with
+    | 0 => "0"%string
+    | _ => string_of_list (string_of_nat_aux n [])
+  end.
+
+Definition crlf := string_of_list ["010","013"].
+
+Fixpoint print_xref_table l :=
+  match l with
+    | []    => ""%string
+    | e::l' => ((print_xref_table_entry e) ++ crlf ++ (print_xref_table l'))%string
+  end.
 
 (*
 Eval compute in parse_xref_entry (list_of_string "0000000005 00002 f "%string).
@@ -429,12 +461,6 @@ Definition find_xref_offset (xs : list ascii) :=
            end
     end.
 
-Example find_xref_offset_ex1 :
-  find_xref_offset (list_of_string "foobar  blabla  startxref  23  %%EOF  "%string)
-    = SomeE(list_of_string "23").
-Proof.
-  cbv. reflexivity.
-Qed.
 *)
 
 (*
@@ -449,6 +475,13 @@ stream,
 null
 indirect object
 *)
+
+Definition main (xs : list ascii) :=
+  match find_and_parse_xref_table xs with
+    | NoneE err => NoneE ("Error: "%string ++ err)
+    | SomeE _   => SomeE "Success!"%string
+  end.
+
 
 Require Import ExtrOcamlNatInt.
 Require Import ExtrOcamlZInt.
