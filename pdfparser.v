@@ -437,6 +437,17 @@ Definition string_of_nat n :=
 
 Definition crlf := string_of_list ["010","013"].
 
+Definition print_xref_entry e :=
+  match e with
+    | (InUse x y) => ((string_of_nat x) ++ " " ++ (string_of_nat y))%string
+    | (Free _ _)  => "unused"%string
+  end.
+
+Definition print_xref_table_entry e :=
+  match e with
+    | (table_entry n e) => ((string_of_nat n) ++ " " ++ (print_xref_entry e))%string
+  end.
+
 Fixpoint print_xref_table l :=
   match l with
     | []    => ""%string
@@ -478,8 +489,8 @@ indirect object
 
 Definition main (xs : list ascii) :=
   match find_and_parse_xref_table xs with
-    | NoneE err => NoneE ("Error: "%string ++ err)
-    | SomeE _   => SomeE "Success!"%string
+    | NoneE err   => NoneE ("Error: "%string ++ err)
+    | SomeE table => SomeE (print_xref_table table)
   end.
 
 
