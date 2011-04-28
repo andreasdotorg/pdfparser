@@ -84,9 +84,16 @@ Definition match_hex_digit := match_one_char_with_predicate isHexDigit.
 
 Definition Z_of_ascii (d : ascii) := Z_of_nat (nat_of_ascii d).
 
-Definition Z_of_digit (d : ascii) := ((Z_of_ascii d) - 48)%Z.
+(* Performance hack... *)
+Definition C48 := 48.
+Definition C48Z := 48%Z.
 
-Definition nat_of_digit (d : ascii) := (nat_of_ascii d) - 48.
+Definition C10 := 10.
+Definition C10Z := 10%Z.
+
+Definition Z_of_digit (d : ascii) := ((Z_of_ascii d) - C48Z)%Z.
+
+Definition nat_of_digit (d : ascii) := (nat_of_ascii d) - C48.
 
 Definition match_sign :=
   match_one_char_with_predicate (fun x => x isin {{"-", "+"}})%char.
@@ -121,7 +128,7 @@ Definition parse_nat : parser nat :=
       | NoneE e => NoneE "No digits found while parsing integer"
       | SomeE (digits, xs')
         => SomeE (fold_left
-                    (fun a b => a * 10 + b)
+                    (fun a b => a * C10 + b)
                     (map nat_of_digit digits)
                     0,
                   xs')
@@ -133,7 +140,7 @@ Definition parse_unsigned_integer : parser Z :=
       | NoneE e => NoneE "No digits found while parsing integer"
       | SomeE (digits, xs')
         => SomeE (fold_left
-                    (fun a b => a * 10 + b)
+                    (fun a b => a * C10Z + b)
                     (map Z_of_digit digits)
                     0,
                   xs')%Z
@@ -416,17 +423,17 @@ Require Import NPeano.
 
 Check Nat.div_lt.
 
-Definition digit_of_nat n := ascii_of_nat (n + 48).
+Definition digit_of_nat n := ascii_of_nat (n + C48).
 
 Require Import Recdef.
 
 Function string_of_nat_aux n acc {measure (fun x => x) n} :=
   match n with
     | 0 => acc
-    | _ => string_of_nat_aux (n / 10) ((digit_of_nat (n mod 10))::acc)
+    | _ => string_of_nat_aux (n / C10) ((digit_of_nat (n mod C10))::acc)
   end.
 Proof.
-  intros. apply Nat.div_lt; auto with arith.
+  intros. unfold C10. apply Nat.div_lt; auto with arith.
 Defined.
 
 Definition string_of_nat n := 
@@ -500,6 +507,7 @@ Require Import ExtrOcamlString.
 
 Extract Constant div => "(/)".
 Extract Constant modulo => "(mod)".
-
+Extract Constant nat_of_ascii => "Char.code".
+Extract Constant ascii_of_nat => "Char.chr".
 
 Extraction "parser.ml" main.
