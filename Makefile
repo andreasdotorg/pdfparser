@@ -14,11 +14,11 @@ allparser.ml: parser.ml preamble.ml pdfparser.vo
 allparser.mli: parser.mli ipreamble.ml pdfparser.vo
 	cat ipreamble.ml parser.mli > allparser.mli
 allparser.cmi: allparser.mli
-	ocamlfind ocamlc -package batteries -package batteries.syntax -syntax camlp4o -c allparser.mli
-allparser.cmo: allparser.ml
-	ocamlfind ocamlc -package batteries -package batteries.syntax -syntax camlp4o -c allparser.ml
-main: allparser.cmo main.ml
-	ocamlfind ocamlc -package batteries -package batteries.syntax -syntax camlp4o -linkpkg allparser.cmo main.ml -o main
+	ocamlfind opt -package batteries -package batteries.syntax -syntax camlp4o -c allparser.mli
+allparser.cmx: allparser.ml
+	ocamlfind opt -package batteries -package batteries.syntax -syntax camlp4o -c allparser.ml
+main: allparser.cmx main.ml
+	ocamlfind opt -package batteries -package batteries.syntax -syntax camlp4o -linkpkg allparser.cmx main.ml -o main
 
 
 t: t.ml

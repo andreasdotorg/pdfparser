@@ -488,7 +488,7 @@ indirect object
 *)
 
 Definition main (xs : list ascii) :=
-  match find_and_parse_xref_table xs with
+  match read_xref_table xs with
     | NoneE err   => NoneE ("Error: "%string ++ err)
     | SomeE table => SomeE (print_xref_table table)
   end.
@@ -498,7 +498,8 @@ Require Import ExtrOcamlNatInt.
 Require Import ExtrOcamlZInt.
 Require Import ExtrOcamlString.
 
-
+Extract Constant div => "(/)".
+Extract Constant modulo => "(mod)".
 
 
 Extraction "parser.ml" main.
