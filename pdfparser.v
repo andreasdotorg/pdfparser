@@ -267,18 +267,36 @@ Example parse_hex_string3_whitespace :
 Proof.
   cbv. eexists. reflexivity.
 Qed.
-(*
-Definition parse_char_string_escape : parser ascii :=
+
+Ltac xref_solver :=
+  try program_simpl;
+  try (repeat (split; unfold not; intros; (try inversion H)));
+  try (split; unfold not; intros; (try inversion H); split; unfold not; intros; inversion H; fail);
+  try (split; unfold not; intro H'; inversion H'; fail);
+  try (split; unfold not; intro; intro H'; inversion H'; fail);
+  try (eauto; fail).
+
+Local Obligation Tactic := xref_solver.
+
+(* \ has already been parsed away *)
+Program Definition parse_char_string_escape : parser ascii :=
   fun xs =>
     match xs with
-      | [] => NoneE "end of string reached"%string
-      | CR::LF::xs' => SomeE (LF, xs')
-      | LF::xs'     => SomeE (LF, xs')
-      | CR::xs'     => SomeE (LF, xs')
-      | "\"::
+      | []       => NoneE "end of string reached during escape parsing"%string
+      | "n"::xs' => SomeE ("010", exist _ xs' _)
+      | "r"::xs' => SomeE ("013", exist _ xs' _)
+      | "t"::xs' => SomeE ("009", exist _ xs' _)
+      | "b"::xs' => SomeE ("008", exist _ xs' _)
+      | "f"::xs' => SomeE ("012", exist _ xs' _)
+      | "("::xs' => SomeE ("(", exist _ xs' _)
+      | ")"::xs' => SomeE (")", exist _ xs' _)
+      | "\"::xs' => SomeE ("\", exist _ xs' _)
+      | _        => NoneE "Illegal escape character"
+        (* oh yeah, need to do octal
+      | "000"::xs' => SomeE (LF, xs') *)
+    end.
 
-nrtbf()\
-
+(*
 Definition parse_string : parser string :=
   fun xs =>
     match
@@ -294,26 +312,9 @@ Definition parse_nonparen_string := many (match_one_char_with_predicate isNotPar
 Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 
   match s with | exist a b => a end.
 
-Fixpoint flatten_aux acc (xs : list (list ascii)) :=
-  match xs with
-    | []   => acc
-    | h::t => flatten_aux (acc ++ h) t
-  end.
+Require Import Coq.Program.Wf.
 
-Definition flatten xs :=
-  flatten_aux [] xs.
-
-Check parse_nonparen_string.
-
-Ltac xref_solver :=
-  try program_simpl;
-  try (split; unfold not; intro H'; inversion H'; fail);
-  try (split; unfold not; intro; intro H'; inversion H'; fail);
-  try (eauto; fail).
-
-Local Obligation Tactic := xref_solver.
-
-Program Fixpoint match_with_level l acc xs : 
+Program Fixpoint match_with_level l acc xs {measure (List.length xs)} : 
   optionE ((list ascii) * {xs' : list ascii | sublist xs' xs}) :=
   match xs with
     | [] => NoneE "end of string reached"
@@ -340,6 +341,44 @@ Program Fixpoint match_with_level l acc xs :
                                end
                       end
                   end
+    | "013"::xs'   => match xs' with
+                        | [] => match l with
+                                  | 0 => SomeE (rev ("010"::acc), exist _ [] _)
+                                  | _ => NoneE "too many open parentheses"
+                                end
+                        | "010"::xs''  =>
+                          match xs'' with
+                            | [] => match l with
+                                      | 0 => SomeE (rev ("010"::acc), exist _ [] _)
+                                      | _ => NoneE "too many open parentheses"
+                                    end
+                            | _  =>                        
+                              match match_with_level l ("010"::acc) xs'' with
+                                | SomeE (res, exist xs''' H) => SomeE (res, exist _ xs''' _)
+                                | NoneE err => NoneE err
+                              end
+                          end
+                        | _ =>  
+                          match match_with_level l ("010"::acc) xs' with
+                            | SomeE (res, exist xs'' H) => SomeE (res, exist _ xs'' _)
+                            | NoneE err => NoneE err
+                          end
+                      end
+    | "\"::xs'   => match parse_char_string_escape xs' with
+                      | NoneE err => NoneE err
+                      | SomeE (x, exist xs'' H) =>
+                        match xs'' with
+                          | [] => match l with
+                                    | 0 => SomeE (rev (x::acc), exist _ [] _)
+                                    | _ => NoneE "too many open parentheses"
+                                  end
+                          | _  => 
+                            match match_with_level l (x::acc) xs'' with
+                              | SomeE (res, exist xs''' H') => SomeE (res, exist _ xs''' _)
+                              | NoneE err => NoneE err
+                            end
+                        end
+                    end
     | x::xs'   => match xs' with
                     | [] => match l with
                               | 0 => SomeE (rev (x::acc), exist _ [] _)
@@ -352,25 +391,32 @@ Program Fixpoint match_with_level l acc xs :
                       end
                   end
   end.
+Next Obligation.
+  simpl. auto. 
+Qed.
+Next Obligation.
+  simpl. clear Heq_anonymous. apply sublist__lt_length in H. auto.  
+Qed.
 
+
+Eval compute in match_with_level 0 [] (list_of_string "foo(bar)"%string).
+Eval compute in match_with_level 0 [] (list_of_string "foo((bar)"%string).
 Eval compute in match_with_level 0 [] (list_of_string "foo(bar))"%string).
+Eval compute in match_with_level 0 [] (list_of_string "fo\to(bar)"%string).
+Eval compute in match_with_level 0 [] (list_of_string "fo\ro(bar)"%string).
+Eval compute in match_with_level 0 [] (list_of_string "foo(bar)\)"%string).
+Eval compute in match_with_level 0 [] (list_of_string "foo\d(bar)"%string).
+Eval compute in match_with_level 0 [] (CR::(list_of_string "foo(bar)"%string)).
+Eval compute in match_with_level 0 [] (LF::(list_of_string "foo(bar)"%string)).
+Eval compute in match_with_level 0 [] (CR::LF::(list_of_string "foo(bar)"%string)).
   
 
-Program Definition parse_non_or_paren : parser (list ascii) :=
-  fix p xs :=
-  alternative parse_nonparen_string
-  (fun xs' =>
-    DO (_, xs'')       <== (match_exactly "(") xs' ;;
-    DO (result, xs''') <== many p (lift_base xs'') ;;
-    DO (_, xs'''')     <== (match_exactly ")") (lift_base xs''') ;;
-    SomeE (flatten result, exist _ (lift_base xs'''') _)) xs.
-
-Definition parse_string level : parser string :=
+Program Definition parse_string : parser string :=
   fun xs =>
     DO (_, xs')       <== (match_exactly "(") xs ;;
-    DO (result, xs'') <== parse_string_aux xs' ;;
-    DO (_, xs''')     <== (match_exactly ")") xs'' ;;
-    result.
+    DO (result, xs'') <== match_with_level 0 []  (lift_base xs') ;;
+    DO (_, xs''')     <== (match_exactly ")") (lift_base xs'') ;;
+    SomeE (string_of_list result, exist _ (lift_base xs''') _).
 
 Fixpoint skip_to_offset {T} (s : list T) (i : nat) :=
   match i with
