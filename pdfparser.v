@@ -74,6 +74,9 @@ Definition isRegularCharacter (c : ascii) : bool :=
 Definition isDigit (c : ascii) : bool :=
   {["0"--"9"]} c.
 
+Definition isOctal (c : ascii) : bool :=
+  {["0"--"7"]} c.
+
 Definition isHexDigit (c : ascii) : bool :=
   (isDigit c) || (c isin {["a"--"f"]}) || (c isin {["A"--"F"]}).
 
@@ -282,32 +285,24 @@ Local Obligation Tactic := xref_solver.
 Program Definition parse_char_string_escape : parser ascii :=
   fun xs =>
     match xs with
-      | []       => NoneE "end of string reached during escape parsing"%string
-      | "n"::xs' => SomeE ("010", exist _ xs' _)
-      | "r"::xs' => SomeE ("013", exist _ xs' _)
-      | "t"::xs' => SomeE ("009", exist _ xs' _)
-      | "b"::xs' => SomeE ("008", exist _ xs' _)
-      | "f"::xs' => SomeE ("012", exist _ xs' _)
-      | "("::xs' => SomeE ("(", exist _ xs' _)
-      | ")"::xs' => SomeE (")", exist _ xs' _)
-      | "\"::xs' => SomeE ("\", exist _ xs' _)
+      | []              => NoneE "end of string reached during escape parsing"%string
+      | "n"::xs'        => SomeE ("010", exist _ xs' _)
+      | "r"::xs'        => SomeE ("013", exist _ xs' _)
+      | "t"::xs'        => SomeE ("009", exist _ xs' _)
+      | "b"::xs'        => SomeE ("008", exist _ xs' _)
+      | "f"::xs'        => SomeE ("012", exist _ xs' _)
+      | "("::xs'        => SomeE ("(", exist _ xs' _)
+      | ")"::xs'        => SomeE (")", exist _ xs' _)
+      | "\"::xs'        => SomeE ("\", exist _ xs' _)
+      | d1::d2::d3::xs' => 
+        if andb (andb (isOctal d1) (isOctal d2)) (isOctal d3) then 
+          SomeE (ascii_of_nat(nat_of_digit(d1) * 64 + nat_of_digit(d2) * 8 + nat_of_digit(d3)), exist _ xs' _)
+          else
+            NoneE "Illegal escape character"
       | _        => NoneE "Illegal escape character"
         (* oh yeah, need to do octal
       | "000"::xs' => SomeE (LF, xs') *)
     end.
-
-(*
-Definition parse_string : parser string :=
-  fun xs =>
-    match
-      sequential3 (match_exactly "(") (many parse_char_string_escape) (match_exactly ")") xs
-    with
-      | SomeE ((_, l, _), xs') => SomeE (string_of_list l, xs')
-      | NoneE err => NoneE err
-    end.
-*)
-
-Definition parse_nonparen_string := many (match_one_char_with_predicate isNotParen).
 
 Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 
   match s with | exist a b => a end.
@@ -406,6 +401,7 @@ Eval compute in match_with_level 0 [] (list_of_string "fo\to(bar)"%string).
 Eval compute in match_with_level 0 [] (list_of_string "fo\ro(bar)"%string).
 Eval compute in match_with_level 0 [] (list_of_string "foo(bar)\)"%string).
 Eval compute in match_with_level 0 [] (list_of_string "foo\d(bar)"%string).
+Eval compute in match_with_level 0 [] (list_of_string "foo\007(bar)"%string).
 Eval compute in match_with_level 0 [] (CR::(list_of_string "foo(bar)"%string)).
 Eval compute in match_with_level 0 [] (LF::(list_of_string "foo(bar)"%string)).
 Eval compute in match_with_level 0 [] (CR::LF::(list_of_string "foo(bar)"%string)).
