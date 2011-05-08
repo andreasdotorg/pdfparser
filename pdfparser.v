@@ -273,6 +273,7 @@ Qed.
 
 Ltac xref_solver :=
   try program_simpl;
+  try (simpl; auto);
   try (repeat (split; unfold not; intros; (try inversion H)));
   try (split; unfold not; intros; (try inversion H); split; unfold not; intros; inversion H; fail);
   try (split; unfold not; intro H'; inversion H'; fail);
@@ -300,8 +301,6 @@ Program Definition parse_char_string_escape : parser ascii :=
           else
             NoneE "Illegal escape character"
       | _        => NoneE "Illegal escape character"
-        (* oh yeah, need to do octal
-      | "000"::xs' => SomeE (LF, xs') *)
     end.
 
 Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 
@@ -359,18 +358,58 @@ Program Fixpoint match_with_level l acc xs {measure (List.length xs)} :
                             | NoneE err => NoneE err
                           end
                       end
-    | "\"::xs'   => match parse_char_string_escape xs' with
-                      | NoneE err => NoneE err
-                      | SomeE (x, exist xs'' H) =>
+    | "\"::xs'   => match xs' with
+                      | "013"::x::xs'' =>
+                        match x with
+                          | "010" =>
+                            match xs'' with
+                              | [] => match l with
+                                        | 0 => SomeE (rev acc, exist _ [] _)
+                                        | _ => NoneE "too many open parentheses"
+                                      end
+                              | _  => 
+                                match match_with_level l acc xs'' with
+                                  | SomeE (res, exist xs''' H) => SomeE (res, exist _ xs''' _)
+                                  | NoneE err => NoneE err
+                                end
+                            end
+                          | _  =>
+                            match match_with_level l acc (x::xs'') with
+                              | SomeE (res, exist xs''' H) => SomeE (res, exist _ xs''' _)
+                              | NoneE err => NoneE err
+                            end
+                        end
+                      | "013"::[]       =>
+                        match l with
+                          | 0 => SomeE (rev acc, exist _ [] _)
+                          | _ => NoneE "too many open parentheses"
+                        end
+                      | "010"::xs''     =>
                         match xs'' with
                           | [] => match l with
-                                    | 0 => SomeE (rev (x::acc), exist _ [] _)
+                                    | 0 => SomeE (rev acc, exist _ [] _)
                                     | _ => NoneE "too many open parentheses"
                                   end
                           | _  => 
-                            match match_with_level l (x::acc) xs'' with
-                              | SomeE (res, exist xs''' H') => SomeE (res, exist _ xs''' _)
+                            match match_with_level l acc xs'' with
+                              | SomeE (res, exist xs''' H) => SomeE (res, exist _ xs''' _)
                               | NoneE err => NoneE err
+                            end
+                        end
+                      | _ =>
+                        match parse_char_string_escape xs' with
+                          | NoneE err => NoneE err
+                          | SomeE (x, exist xs'' H) =>
+                            match xs'' with
+                              | [] => match l with
+                                        | 0 => SomeE (rev (x::acc), exist _ [] _)
+                                        | _ => NoneE "too many open parentheses"
+                                      end
+                              | _  => 
+                                match match_with_level l (x::acc) xs'' with
+                                  | SomeE (res, exist xs''' H') => SomeE (res, exist _ xs''' _)
+                                  | NoneE err => NoneE err
+                                end
                             end
                         end
                     end
@@ -387,10 +426,7 @@ Program Fixpoint match_with_level l acc xs {measure (List.length xs)} :
                   end
   end.
 Next Obligation.
-  simpl. auto. 
-Qed.
-Next Obligation.
-  simpl. clear Heq_anonymous. apply sublist__lt_length in H. auto.  
+  simpl. clear Heq_anonymous. apply sublist__lt_length in H0. auto.  
 Qed.
 
 
@@ -405,6 +441,9 @@ Eval compute in match_with_level 0 [] (list_of_string "foo\007(bar)"%string).
 Eval compute in match_with_level 0 [] (CR::(list_of_string "foo(bar)"%string)).
 Eval compute in match_with_level 0 [] (LF::(list_of_string "foo(bar)"%string)).
 Eval compute in match_with_level 0 [] (CR::LF::(list_of_string "foo(bar)"%string)).
+Eval compute in match_with_level 0 [] ("\"::CR::(list_of_string "foo(bar)"%string)).
+Eval compute in match_with_level 0 [] ("\"::LF::(list_of_string "foo(bar)"%string)).
+Eval compute in match_with_level 0 [] ("\"::CR::LF::(list_of_string "foo(bar)"%string)).
   
 
 Program Definition parse_string : parser string :=
