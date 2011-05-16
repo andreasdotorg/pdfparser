@@ -327,6 +327,15 @@ Notation "'guarded_recursion' function ; l ; acc ; xs" :=
                | 0 => SomeE (rev acc, exist _ [] _)
                | _ => NoneE "too many open parentheses at end of string"
              end
+     | ")"::xs' =>
+       match l with
+         | 0 =>  SomeE (rev acc, exist _ xs _)
+         | _ =>
+           match function l acc%list xs _ with
+             | SomeE (res, exist xs' H) => SomeE (res, exist _ xs' _)
+             | NoneE err => NoneE err
+           end
+       end
      | _  => 
        match function l acc%list xs _ with
          | SomeE (res, exist xs' H) => SomeE (res, exist _ xs' _)
@@ -335,96 +344,217 @@ Notation "'guarded_recursion' function ; l ; acc ; xs" :=
    end)
   (right associativity, at level 70).
 
+Ltac match_level_solver :=
+  try program_simpl;
+  try (simpl; auto);
+  try (simpl in *; inversion H0; fail);
+  try (repeat (split; unfold not; intros; (try inversion H)));
+  try (split; unfold not; intros; (try inversion H); split; unfold not; intros; inversion H; fail);
+  try (split; unfold not; intro H'; inversion H'; fail);
+  try (split; unfold not; intro; intro H'; inversion H'; fail);
+  try (eauto; fail).
+
+Local Obligation Tactic := match_level_solver.
+
 Program Fixpoint match_with_level l acc xs {measure (List.length xs)} : 
   optionE ((list ascii) * {xs' : list ascii | sublist xs' xs}) :=
   match xs with
     | [] => NoneE "end of string reached"
-
-    | "("::xs' => guarded_recursion match_with_level ; (S l) ; ("("::acc) ; xs'
-    | ")"::xs' => match l with
-                    | 0      => NoneE "this shouldn't even happen"
-                    | (S l') => guarded_recursion match_with_level ; l' ; (")"::acc) ; xs'
-                  end
-    | "013"::xs'   => match xs' with
-                        | [] => match l with
-                                  | 0 => SomeE (rev ("010"::acc), exist _ [] _)
-                                  | _ => NoneE "too many open parentheses at end of string"
-                                end
-                        | "010"::xs''  =>
-                          match xs'' with
-                            | [] => match l with
-                                      | 0 => SomeE (rev ("010"::acc), exist _ [] _)
-                                      | _ => NoneE "too many open parentheses at end of string"
-                                    end
-                            | _  =>                        
-                              match match_with_level l ("010"::acc) xs'' with
-                                | SomeE (res, exist xs''' H) => SomeE (res, exist _ xs''' _)
-                                | NoneE err => NoneE err
-                              end
-                          end
-                        | _ =>  
-                          match match_with_level l ("010"::acc) xs' with
-                            | SomeE (res, exist xs'' H) => SomeE (res, exist _ xs'' _)
-                            | NoneE err => NoneE err
-                          end
-                      end
-    | "\"::xs'   => match xs' with
-                      | "013"::x::xs'' =>
-                        match x with
-                          | "010" =>
-                            match xs'' with
-                              | [] => match l with
-                                        | 0 => SomeE (rev acc, exist _ [] _)
-                                        | _ => NoneE "too many open parentheses at end of string"
-                                      end
-                              | _  => 
-                                match match_with_level l acc xs'' with
-                                  | SomeE (res, exist xs''' H) => SomeE (res, exist _ xs''' _)
-                                  | NoneE err => NoneE err
-                                end
-                            end
-                          | _  =>
-                            match match_with_level l acc (x::xs'') with
-                              | SomeE (res, exist xs''' H) => SomeE (res, exist _ xs''' _)
-                              | NoneE err => NoneE err
-                            end
-                        end
-                      | "013"::[]       =>
-                        match l with
-                          | 0 => SomeE (rev acc, exist _ [] _)
-                          | _ => NoneE "too many open parentheses at end of string"
-                        end
-                      | "010"::xs''     =>
-                        match xs'' with
-                          | [] => match l with
-                                    | 0 => SomeE (rev acc, exist _ [] _)
-                                    | _ => NoneE "too many open parentheses at end of string"
-                                  end
-                          | _  => 
-                            match match_with_level l acc xs'' with
-                              | SomeE (res, exist xs''' H) => SomeE (res, exist _ xs''' _)
-                              | NoneE err => NoneE err
-                            end
-                        end
-                      | _ =>
-                        match parse_char_string_escape xs' with
-                          | NoneE err => NoneE err
-                          | SomeE (x, exist xs'' H) =>
-                            match xs'' with
-                              | [] => match l with
-                                        | 0 => SomeE (rev (x::acc), exist _ [] _)
-                                        | _ => NoneE "too many open parentheses at end of string"
-                                      end
-                              | _  => 
-                                match match_with_level l (x::acc) xs'' with
-                                  | SomeE (res, exist xs''' H') => SomeE (res, exist _ xs''' _)
-                                  | NoneE err => NoneE err
-                                end
-                            end
-                        end
-                    end
-    | x::xs'   => guarded_recursion match_with_level ; l ; (x::acc) ; xs'
+    | "("::xs' 
+      => guarded_recursion match_with_level ; (S l) ; ("("::acc) ; xs'
+    | ")"::xs' 
+      => match l with
+           | 0      => NoneE "this shouldn't even happen"
+           | (S l') => guarded_recursion match_with_level ; l' ; (")"::acc) ; xs'
+         end
+    | "013"::"010"::xs' 
+      => guarded_recursion match_with_level ; l ; ("010"::acc) ; xs'
+    | "013"::xs'   
+      => guarded_recursion match_with_level ; l ; ("010"::acc) ; xs'
+    | "\"::"013"::"010"::xs' 
+      => guarded_recursion match_with_level ; l ; acc ; xs'
+    | "\"::"013"::xs' 
+      => guarded_recursion match_with_level ; l ; acc ; xs'
+    | "\"::"010"::xs' 
+      => guarded_recursion match_with_level ; l ; acc ; xs'
+    | "\"::xs'   
+      => match parse_char_string_escape xs' with
+           | NoneE err => NoneE err
+           | SomeE (x, exist xs'' H) =>
+             guarded_recursion match_with_level ; l ; (x::acc) ; xs''
+         end
+    | x::xs'   
+      => guarded_recursion match_with_level ; l ; (x::acc) ; xs'
   end.
+Next Obligation.
+  inversion H0. inversion H0. 
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  [inversion H0 | inversion H0].
+Qed.
+Next Obligation.
+  simpl in *. inversion H0. auto. rewrite H
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+Next Obligation.
+  inversion H0. inversion H0.
+Qed.
+
+
+  intros. inversion Heq_anonymous0. 
+Qed.
+Next Obligation.
+  intros. inversion Heq_xs. auto. 
+Qed.
+Next Obligation.
+  intros. inversion H0. inversion Heq_anonymous. auto. 
+
+
+  simpl in *. inversion H0. inversion H0. 
+Qed.
+Next Obligation.
+  simpl in *; repeat inversion H0.
 Next Obligation.
   simpl. clear Heq_anonymous. apply sublist__lt_length in H0. auto.  
 Qed.
