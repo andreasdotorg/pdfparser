@@ -165,6 +165,19 @@ Definition parse_integer : parser Z :=
       | NoneE err => NoneE err
     end.
 
+Definition parse_number : parser string :=
+  fun xs =>
+    match sequential3 (sequential_leftopt match_sign match_integer) (match_exactly ".") match_integer xs with
+      | NoneE err => NoneE "not a fractional number"
+      | SomeE (NoneE _, integral, period, fractional, xs')
+        => SomeE (string_of_list (integral++(period::fractional)), xs')
+      | SomeE ((SomeE sign, integral, period, fractional), xs')
+        => SomeE (string_of_list ((sign::integral)++(period::fractional)), xs')
+    end.
+
+Eval compute in parse_number (list_of_string "+30.5").
+
+
 Example parse_integer1 :
   exists e,
     parse_integer (list_of_string("123")) = SomeE (123%Z, e).
@@ -308,43 +321,40 @@ Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) :=
 
 Require Import Coq.Program.Wf.
 
+Notation "'guarded_recursion' function ; l ; acc ; xs" :=
+  (match xs with
+     | [] => match l with
+               | 0 => SomeE (rev acc, exist _ [] _)
+               | _ => NoneE "too many open parentheses at end of string"
+             end
+     | _  => 
+       match function l acc%list xs _ with
+         | SomeE (res, exist xs' H) => SomeE (res, exist _ xs' _)
+         | NoneE err => NoneE err
+       end
+   end)
+  (right associativity, at level 70).
+
 Program Fixpoint match_with_level l acc xs {measure (List.length xs)} : 
   optionE ((list ascii) * {xs' : list ascii | sublist xs' xs}) :=
   match xs with
     | [] => NoneE "end of string reached"
 
-    | "("::xs' => match xs' with
-                    | [] => NoneE "too many open parentheses"
-                    | _  =>
-                      match match_with_level (S l) ("("::acc) xs' with
-                        | SomeE (res, exist xs'' H) => SomeE (res, exist _ xs'' _)
-                        | NoneE err => NoneE err
-                      end
-                  end
+    | "("::xs' => guarded_recursion match_with_level ; (S l) ; ("("::acc) ; xs'
     | ")"::xs' => match l with
-                    | 0      => NoneE "too many closing parentheses"
-                    | (S l') => 
-                      match xs' with
-                        | [] => match l' with
-                                  | 0 => SomeE (rev (")"::acc), exist _ [] _)
-                                  | _ => NoneE "too many open parentheses"
-                                end
-                        | _ => match match_with_level l' (")"::acc) xs' with
-                                 | SomeE (res, exist xs'' H) => SomeE (res, exist _ xs'' _)
-                                 | NoneE err => NoneE err
-                               end
-                      end
+                    | 0      => NoneE "this shouldn't even happen"
+                    | (S l') => guarded_recursion match_with_level ; l' ; (")"::acc) ; xs'
                   end
     | "013"::xs'   => match xs' with
                         | [] => match l with
                                   | 0 => SomeE (rev ("010"::acc), exist _ [] _)
-                                  | _ => NoneE "too many open parentheses"
+                                  | _ => NoneE "too many open parentheses at end of string"
                                 end
                         | "010"::xs''  =>
                           match xs'' with
                             | [] => match l with
                                       | 0 => SomeE (rev ("010"::acc), exist _ [] _)
-                                      | _ => NoneE "too many open parentheses"
+                                      | _ => NoneE "too many open parentheses at end of string"
                                     end
                             | _  =>                        
                               match match_with_level l ("010"::acc) xs'' with
@@ -365,7 +375,7 @@ Program Fixpoint match_with_level l acc xs {measure (List.length xs)} :
                             match xs'' with
                               | [] => match l with
                                         | 0 => SomeE (rev acc, exist _ [] _)
-                                        | _ => NoneE "too many open parentheses"
+                                        | _ => NoneE "too many open parentheses at end of string"
                                       end
                               | _  => 
                                 match match_with_level l acc xs'' with
@@ -382,13 +392,13 @@ Program Fixpoint match_with_level l acc xs {measure (List.length xs)} :
                       | "013"::[]       =>
                         match l with
                           | 0 => SomeE (rev acc, exist _ [] _)
-                          | _ => NoneE "too many open parentheses"
+                          | _ => NoneE "too many open parentheses at end of string"
                         end
                       | "010"::xs''     =>
                         match xs'' with
                           | [] => match l with
                                     | 0 => SomeE (rev acc, exist _ [] _)
-                                    | _ => NoneE "too many open parentheses"
+                                    | _ => NoneE "too many open parentheses at end of string"
                                   end
                           | _  => 
                             match match_with_level l acc xs'' with
@@ -403,7 +413,7 @@ Program Fixpoint match_with_level l acc xs {measure (List.length xs)} :
                             match xs'' with
                               | [] => match l with
                                         | 0 => SomeE (rev (x::acc), exist _ [] _)
-                                        | _ => NoneE "too many open parentheses"
+                                        | _ => NoneE "too many open parentheses at end of string"
                                       end
                               | _  => 
                                 match match_with_level l (x::acc) xs'' with
@@ -413,17 +423,7 @@ Program Fixpoint match_with_level l acc xs {measure (List.length xs)} :
                             end
                         end
                     end
-    | x::xs'   => match xs' with
-                    | [] => match l with
-                              | 0 => SomeE (rev (x::acc), exist _ [] _)
-                              | _ => NoneE "too many open parentheses"
-                            end
-                    | _  => 
-                      match match_with_level l (x::acc) xs' with
-                        | SomeE (res, exist xs'' H) => SomeE (res, exist _ xs'' _)
-                        | NoneE err => NoneE err
-                      end
-                  end
+    | x::xs'   => guarded_recursion match_with_level ; l ; (x::acc) ; xs'
   end.
 Next Obligation.
   simpl. clear Heq_anonymous. apply sublist__lt_length in H0. auto.  
@@ -452,6 +452,52 @@ Program Definition parse_string : parser string :=
     DO (result, xs'') <== match_with_level 0 []  (lift_base xs') ;;
     DO (_, xs''')     <== (match_exactly ")") (lift_base xs'') ;;
     SomeE (string_of_list result, exist _ (lift_base xs''') _).
+
+Program Definition parse_name_char : parser ascii :=
+  fun xs =>
+    match xs with
+      | "#"::c1::c2::xs' => 
+        if andb (isHexDigit c1) (isHexDigit c2) then
+          SomeE (ascii_of_Z (Z_of_hex_digit(c1) * 16 + Z_of_hex_digit(c2)),
+                        exist _ xs' _)
+        else
+          NoneE "Illegal # encoding in name"
+      | "000"::xs' => NoneE "Illegal null char in name"
+      | c::xs' => SomeE (c, exist _ xs' _)
+      | [] => NoneE "End of string while parsing name char"
+    end.
+
+Program Definition parse_name : parser string :=
+  fun xs =>
+    DO (_, xs')       <== (match_exactly "/") xs ;;
+    DO (result, xs'') <== (many parse_name_char) xs' ;;
+    SomeE (string_of_list result, exist _ (lift_base xs'') _).
+
+Definition parse_null : parser PDF.PDFObject :=
+  fun xs =>
+    match match_string "null" xs with
+      | SomeE (_, xs') => SomeE (PDF.PDFNull, xs')
+      | NoneE err => NoneE err
+    end.
+
+Program Definition parse_pdf_object : parser PDF.PDFObject :=
+  fun xs =>
+    DO (x, xs')    <-- parse_boolean xs ;; SomeE (x, xs')
+    OR DO (x, xs') <-- parse_null xs ;; SomeE (x, xs')
+    OR DO (x, xs') <-- parse_name xs ;; SomeE (PDF.PDFName x, xs')
+    OR DO (x, xs') <-- parse_hex_string xs ;; SomeE (PDF.PDFString x, xs')
+    OR DO (x, xs') <-- parse_string xs ;; SomeE (PDF.PDFString x, xs')
+    OR DO (x, xs') <-- parse_number xs ;; SomeE (PDF.PDFNumber (PDF.Float x), xs')
+    OR DO (x, xs') <-- parse_integer xs ;; SomeE (PDF.PDFNumber (PDF.Integer x), xs')
+    OR NoneE "parse error".
+
+Eval compute in parse_pdf_object (list_of_string "true").
+Eval compute in parse_pdf_object (list_of_string "false").
+Eval compute in parse_pdf_object (list_of_string "null").
+Eval compute in parse_pdf_object (list_of_string "/foo").
+Eval compute in parse_pdf_object (list_of_string "23").
+Eval compute in parse_pdf_object (list_of_string "<454647>").
+Eval compute in parse_pdf_object (list_of_string "(abc)").
 
 Fixpoint skip_to_offset {T} (s : list T) (i : nat) :=
   match i with
@@ -499,6 +545,17 @@ Qed.
 Inductive Xref_entry : Set :=
   | InUse : nat -> nat -> Xref_entry
   | Free : nat -> nat -> Xref_entry.
+
+Ltac xref_solver' :=
+  try program_simpl;
+  try (split; unfold not; intros; (try inversion H); split; unfold not; intros; inversion H; fail);
+  try (split; unfold not; intro H'; inversion H'; fail);
+  try (split; unfold not; intro; intro H'; inversion H'; fail);
+  try (eauto; fail).
+
+Local Obligation Tactic := xref_solver'.
+
+
 
 Program Definition parse_xref_entry : parser Xref_entry :=
   fun xs =>
