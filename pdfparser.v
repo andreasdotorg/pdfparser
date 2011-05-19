@@ -10,6 +10,7 @@ Require Import QArith.
 Require Import Recdef.
 Require Import Coq.Program.Basics.
 Require Import Coq.Program.Tactics.
+Require Import Coq.Program.Wf.
 
 Require Import pdftype.
 Require Import sublist.
@@ -291,7 +292,8 @@ Ltac xref_solver :=
   try (split; unfold not; intros; (try inversion H); split; unfold not; intros; inversion H; fail);
   try (split; unfold not; intro H'; inversion H'; fail);
   try (split; unfold not; intro; intro H'; inversion H'; fail);
-  try (eauto; fail).
+  try (eauto; fail);
+  fail.
 
 Local Obligation Tactic := xref_solver.
 
@@ -318,8 +320,6 @@ Program Definition parse_char_string_escape : parser ascii :=
 
 Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 
   match s with | exist a b => a end.
-
-Require Import Coq.Program.Wf.
 
 Notation "'guarded_recursion' function ; l ; acc ; xs" :=
   (match xs with
@@ -348,13 +348,33 @@ Ltac match_level_solver :=
   try program_simpl;
   try (simpl; auto);
   try (simpl in *; inversion H0; fail);
-  try (repeat (split; unfold not; intros; (try inversion H)));
+  try (repeat (split; unfold not; intros; (try inversion H)); fail);
   try (split; unfold not; intros; (try inversion H); split; unfold not; intros; inversion H; fail);
   try (split; unfold not; intro H'; inversion H'; fail);
   try (split; unfold not; intro; intro H'; inversion H'; fail);
   try (eauto; fail).
 
-Local Obligation Tactic := match_level_solver.
+(* Local Obligation Tactic := match_level_solver. *)
+
+Local Obligation Tactic :=
+  try program_simpl;
+  simpl;
+    try (repeat split; intros; let C := fresh in
+         intro C; inversion C; fail);
+    try (repeat apply lt_n_S; repeat constructor; fail);
+    try (simpl in *;
+         match goal with
+         | Hs : sublist _ _ |- _ =>
+           pose proof (sublist__lt_length Hs) as Hl;
+           unfold lt_length in Hl; simpl in Hl;
+           refine (lt_trans _ _ _ Hl _)
+         end;
+        auto; fail);
+    try (eapply sublist_trans;
+          [ eassumption
+          | eapply sublist_trans; try eassumption];
+        auto; fail);
+    auto.
 
 Program Fixpoint match_with_level l acc xs {measure (List.length xs)} : 
   optionE ((list ascii) * {xs' : list ascii | sublist xs' xs}) :=
@@ -386,179 +406,6 @@ Program Fixpoint match_with_level l acc xs {measure (List.length xs)} :
     | x::xs'   
       => guarded_recursion match_with_level ; l ; (x::acc) ; xs'
   end.
-Next Obligation.
-  inversion H0. inversion H0. 
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  [inversion H0 | inversion H0].
-Qed.
-Next Obligation.
-  simpl in *. inversion H0. auto. rewrite H
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-Next Obligation.
-  inversion H0. inversion H0.
-Qed.
-
-
-  intros. inversion Heq_anonymous0. 
-Qed.
-Next Obligation.
-  intros. inversion Heq_xs. auto. 
-Qed.
-Next Obligation.
-  intros. inversion H0. inversion Heq_anonymous. auto. 
-
-
-  simpl in *. inversion H0. inversion H0. 
-Qed.
-Next Obligation.
-  simpl in *; repeat inversion H0.
-Next Obligation.
-  simpl. clear Heq_anonymous. apply sublist__lt_length in H0. auto.  
-Qed.
-
 
 Eval compute in match_with_level 0 [] (list_of_string "foo(bar)"%string).
 Eval compute in match_with_level 0 [] (list_of_string "foo((bar)"%string).
