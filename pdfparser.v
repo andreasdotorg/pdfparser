@@ -419,7 +419,7 @@ Program Definition parse_string_inner
   match xs with
   | nil      => NoneE "empty string while parsing string"
   (* newlines *)
-  | "010"::"013"::xs' => SomeE ("010"::acc, exist _ xs' _)
+  | "013"::"010"::xs' => SomeE ("010"::acc, exist _ xs' _)
   | "013"::xs'        => SomeE ("010"::acc, exist _ xs' _)
   (* escapes *)
   | "\"::"013"::"010"::xs' => SomeE (acc, exist _ xs' _)
@@ -488,7 +488,7 @@ Eval compute in testStringParser "(foo\d(bar))" "" "". (* bad esc *)
 Eval compute in testStringParser "(foo\011(bar))" ("foo" ++ tab "(bar)") "".
 Eval compute in testStringParser ("("%string ++ cr "foo(bar))") (lf "foo(bar)") "". 
 Eval compute in testStringParser ("(" ++ lf "foo(bar))") (lf "foo(bar)") "".
-Eval compute in testStringParser ("(" ++ cr (lf "foo(bar))")) (lf (lf "foo(bar)")) "". (* XXX intended? XXX *)
+Eval compute in testStringParser ("(" ++ cr (lf "foo(bar))")) (lf "foo(bar)") "". (* XXX intended? XXX *)
 Eval compute in testStringParser ("(\" ++ cr "foo(bar))") "foo(bar)" "".
 Eval compute in testStringParser ("(\" ++ lf "foo(bar))") "foo(bar)" "".
 Eval compute in testStringParser ("(\" ++ cr (lf "foo(bar))")) "foo(bar)" "".
