@@ -534,6 +534,7 @@ Program Definition parse_pdf_object : parser PDF.PDFObject :=
     OR DO (x, xs') <-- parse_string xs ;; SomeE (PDF.PDFString x, xs')
     OR DO (x, xs') <-- parse_number xs ;; SomeE (PDF.PDFNumber (PDF.Float x), xs')
     OR DO (x, xs') <-- parse_integer xs ;; SomeE (PDF.PDFNumber (PDF.Integer x), xs')
+(*  OR DO (x, xs') <-- parse_array xs ;; SomeE (x, xs') FIXME *)
     OR NoneE "parse error".
 
 Eval compute in parse_pdf_object (list_of_string "true").
@@ -543,6 +544,22 @@ Eval compute in parse_pdf_object (list_of_string "/foo").
 Eval compute in parse_pdf_object (list_of_string "23").
 Eval compute in parse_pdf_object (list_of_string "<454647>").
 Eval compute in parse_pdf_object (list_of_string "(abc)").
+
+Definition opt_ws {T:Set} (p : parser T) : parser (T) :=
+  fun xs =>
+    DO (val, xs') <== sequential_leftopt (many match_white) p xs ;; SomeE ((snd val), xs').
+
+Program Definition parse_array : parser PDF.PDFObject :=
+  fun xs =>
+    DO (_, xs')       <== (match_exactly "[") xs ;;
+    DO (result, xs'') <== many (opt_ws parse_pdf_object) xs' ;;
+    DO (_, xs''')     <== (match_exactly "]") xs'' ;;
+    SomeE (PDF.PDFArray result, exist _ (lift_base xs'') _).
+Next Obligation.
+  admit.
+Defined.
+
+Eval compute in parse_array (list_of_string "[/foo (bar)]").
 
 Fixpoint skip_to_offset {T} (s : list T) (i : nat) :=
   match i with
@@ -565,10 +582,6 @@ Definition list_last_n {T} (xs : list T) (i : nat) :=
 
 Definition rev_string (s : string) :=
   string_of_list (rev (list_of_string s)).
-
-Definition opt_ws {T:Set} (p : parser T) : parser (T) :=
-  fun xs =>
-    DO (val, xs') <== sequential_leftopt (many match_white) p xs ;; SomeE ((snd val), xs').
 
 Definition find_xref_offset (xs : list ascii) :=
   let rxs := rev (list_last_n xs 100) in
