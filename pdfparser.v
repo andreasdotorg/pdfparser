@@ -321,114 +321,179 @@ Program Definition parse_char_string_escape : parser ascii :=
 Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 
   match s with | exist a b => a end.
 
-Notation "'guarded_recursion' function ; l ; acc ; xs" :=
-  (match xs with
-     | [] => match l with
-               | 0 => SomeE (rev acc, exist _ [] _)
-               | _ => NoneE "too many open parentheses at end of string"
-             end
-     | ")"::xs' =>
-       match l with
-         | 0 =>  SomeE (rev acc, exist _ xs _)
-         | _ =>
-           match function l acc%list xs _ with
-             | SomeE (res, exist xs' H) => SomeE (res, exist _ xs' _)
-             | NoneE err => NoneE err
-           end
-       end
-     | _  => 
-       match function l acc%list xs _ with
-         | SomeE (res, exist xs' H) => SomeE (res, exist _ xs' _)
-         | NoneE err => NoneE err
-       end
-   end)
-  (right associativity, at level 70).
+Local Obligation Tactic := program_simpl.
 
-Ltac match_level_solver :=
-  try program_simpl;
-  try (simpl; auto);
-  try (simpl in *; inversion H0; fail);
-  try (repeat (split; unfold not; intros; (try inversion H)); fail);
-  try (split; unfold not; intros; (try inversion H); split; unfold not; intros; inversion H; fail);
-  try (split; unfold not; intro H'; inversion H'; fail);
-  try (split; unfold not; intro; intro H'; inversion H'; fail);
-  try (eauto; fail).
-
-(* Local Obligation Tactic := match_level_solver. *)
-
-Local Obligation Tactic :=
-  try program_simpl;
-  simpl;
-    try (repeat split; intros; let C := fresh in
-         intro C; inversion C; fail);
-    try (repeat apply lt_n_S; repeat constructor; fail);
-    try (simpl in *;
-         match goal with
-         | Hs : sublist _ _ |- _ =>
-           pose proof (sublist__lt_length Hs) as Hl;
-           unfold lt_length in Hl; simpl in Hl;
-           refine (lt_trans _ _ _ Hl _)
-         end;
-        auto; fail);
-    try (eapply sublist_trans;
-          [ eassumption
-          | eapply sublist_trans; try eassumption];
-        auto; fail);
-    auto.
-
-Program Fixpoint match_with_level l acc xs {measure (List.length xs)} : 
-  optionE ((list ascii) * {xs' : list ascii | sublist xs' xs}) :=
-  match xs with
-    | [] => NoneE "end of string reached"
-    | "("::xs' 
-      => guarded_recursion match_with_level ; (S l) ; ("("::acc) ; xs'
-    | ")"::xs' 
-      => match l with
-           | 0      => NoneE "this shouldn't even happen"
-           | (S l') => guarded_recursion match_with_level ; l' ; (")"::acc) ; xs'
-         end
-    | "013"::"010"::xs' 
-      => guarded_recursion match_with_level ; l ; ("010"::acc) ; xs'
-    | "013"::xs'   
-      => guarded_recursion match_with_level ; l ; ("010"::acc) ; xs'
-    | "\"::"013"::"010"::xs' 
-      => guarded_recursion match_with_level ; l ; acc ; xs'
-    | "\"::"013"::xs' 
-      => guarded_recursion match_with_level ; l ; acc ; xs'
-    | "\"::"010"::xs' 
-      => guarded_recursion match_with_level ; l ; acc ; xs'
-    | "\"::xs'   
-      => match parse_char_string_escape xs' with
-           | NoneE err => NoneE err
-           | SomeE (x, exist xs'' H) =>
-             guarded_recursion match_with_level ; l ; (x::acc) ; xs''
-         end
-    | x::xs'   
-      => guarded_recursion match_with_level ; l ; (x::acc) ; xs'
+Local Notation "'fixExist' '(' t ')'" :=
+  match t with
+  | SomeE result =>
+    match result with
+    | (resultFix, exist xFix HFix) => SomeE (resultFix, exist _ xFix _)
+    end
+  | NoneE err => NoneE err
   end.
 
-Eval compute in match_with_level 0 [] (list_of_string "foo(bar)"%string).
-Eval compute in match_with_level 0 [] (list_of_string "foo((bar)"%string).
-Eval compute in match_with_level 0 [] (list_of_string "foo(bar))"%string).
-Eval compute in match_with_level 0 [] (list_of_string "fo\to(bar)"%string).
-Eval compute in match_with_level 0 [] (list_of_string "fo\ro(bar)"%string).
-Eval compute in match_with_level 0 [] (list_of_string "foo(bar)\)"%string).
-Eval compute in match_with_level 0 [] (list_of_string "foo\d(bar)"%string).
-Eval compute in match_with_level 0 [] (list_of_string "foo\007(bar)"%string).
-Eval compute in match_with_level 0 [] (CR::(list_of_string "foo(bar)"%string)).
-Eval compute in match_with_level 0 [] (LF::(list_of_string "foo(bar)"%string)).
-Eval compute in match_with_level 0 [] (CR::LF::(list_of_string "foo(bar)"%string)).
-Eval compute in match_with_level 0 [] ("\"::CR::(list_of_string "foo(bar)"%string)).
-Eval compute in match_with_level 0 [] ("\"::LF::(list_of_string "foo(bar)"%string)).
-Eval compute in match_with_level 0 [] ("\"::CR::LF::(list_of_string "foo(bar)"%string)).
-  
+(* match balanced construct, using f to parse the inner content
+   the opening 'from' char is expected to be already consumed *)
+Program Fixpoint matchBalancedWith
+    (from until : ascii)
+    (f : list ascii -> forall xs0 : list ascii,
+        optionE (list ascii * {xs' : list ascii | sublist xs' xs0}))
+    (st : list ascii)
+    (xs : list ascii)
+    {measure (List.length xs)}
+    : optionE (list ascii * {xs' : list ascii | sublist xs' xs})
+    :=
+  match xs with
+  | nil    => NoneE "matchBalancedWith: unbalanced (empty list)"
+  | x::xs' =>
+    match ascii_dec from x with
+    | left  _ => (* recurse *)
+      (* run next level *)
+      match matchBalancedWith from until f ("("::st) xs' with
+      | SomeE ret =>
+        (* insert closing *)
+        match ret with
+        | (st', exist xs'' H) =>
+          (* run rest *)
+          match matchBalancedWith from until f (")"::st') xs'' with
+          | SomeE ret' =>
+            match ret' with
+            | (st'', exist xs''' H') => SomeE (st'', exist _ xs''' _)
+            end
+          | NoneE err  => NoneE err
+          end
+        end
+      | NoneE err => NoneE err
+      end
+    | right _ =>
+      match ascii_dec until x with
+      | left  _ => SomeE (st, exist _ xs' _)
+      | right _ => (* sub-parser *)
+        (* run sub-parser *)
+        match f st (x::xs') with
+        | SomeE ret =>
+          match ret with
+          | (st', exist xs'' H) =>
+            (* run rest *)
+            match matchBalancedWith from until f st' xs'' with
+            | SomeE ret' =>
+              match ret' with
+              | (st'', exist xs''' H) => SomeE (st'', exist _ xs''' _)
+              end
+            | NoneE err  => NoneE err
+            end
+          end
+        | NoneE err => NoneE err
+        end
+      end
+    end
+  end.
+Next Obligation.
+  pose proof (sl_tail x xs') as Ht.
+  pose proof (sublist_trans H Ht) as Hs.
+  apply (sublist__lt_length Hs).
+Defined.
+Next Obligation.
+  pose proof (sl_tail x xs') as Ht.
+  pose proof (sublist_trans H' H) as Ht'.
+  apply (sublist_trans Ht' Ht).
+Defined.
+Next Obligation.
+  apply (sublist__lt_length H).
+Defined.
+Next Obligation.
+  apply (sublist_trans H0 H).
+Defined.
+
+Local Obligation Tactic :=
+  program_simpl;
+  simpl;
+    try (repeat split; intros;
+        let C := fresh in intro C; inversion C; auto; fail);
+  auto.
+
+Program Definition parse_string_inner
+    (acc xs : list ascii)
+    : optionE (list ascii * {xs' : list ascii | sublist xs' xs})
+    :=
+  match xs with
+  | nil      => NoneE "empty string while parsing string"
+  (* newlines *)
+  | "010"::"013"::xs' => SomeE ("010"::acc, exist _ xs' _)
+  | "013"::xs'        => SomeE ("010"::acc, exist _ xs' _)
+  (* escapes *)
+  | "\"::"013"::"010"::xs' => SomeE (acc, exist _ xs' _)
+  | "\"::"013"::xs'        => SomeE (acc, exist _ xs' _)
+  | "\"::"010"::xs'        => SomeE (acc, exist _ xs' _)
+  | "\"::xs' =>
+    match parse_char_string_escape xs' with
+    | SomeE ret =>
+      match ret with
+        (esc, exist xs'' H) => SomeE (esc::acc, exist _ xs'' _)
+      end
+    | NoneE err => NoneE err
+    end
+  (* default *)
+  | x::xs' => SomeE (x::acc, exist _ xs' _)
+  end.
 
 Program Definition parse_string : parser string :=
-  fun xs =>
-    DO (_, xs')       <== (match_exactly "(") xs ;;
-    DO (result, xs'') <== match_with_level 0 []  (lift_base xs') ;;
-    DO (_, xs''')     <== (match_exactly ")") (lift_base xs'') ;;
-    SomeE (string_of_list result, exist _ (lift_base xs''') _).
+  fun xs0 =>
+    match xs0 with
+    | ("("::xs) =>
+      match matchBalancedWith "(" ")" parse_string_inner nil xs with
+      | SomeE ret =>
+        match ret with
+        | (acc, exist xs' H) => SomeE (string_of_list (rev acc), exist _ xs' _)
+        end
+      | NoneE err => NoneE err
+      end
+    | _         => NoneE "parse_string: expected '('"
+    end.
+
+(* testing *)
+
+Definition testStringParser (inp out rest : string) : optionE bool :=
+  match parse_string (list_of_string inp) with
+  | SomeE ret =>
+    match ret with
+    | (out', exist rest' _) =>
+      match string_dec out out' with
+      | left  _ =>
+        match string_dec rest (string_of_list rest') with
+        | left  _ => SomeE true
+        | right _ => NoneE "rest differs"
+        end
+      | right _ => NoneE "output differs"
+      end
+    end
+  | NoneE err =>
+    match out with
+    | ""%string => SomeE true
+    | _  => NoneE err
+    end
+  end.
+
+Definition cr  (s : string) : string := String "013" s.
+Definition lf  (s : string) : string := String "010" s.
+Definition tab (s : string) : string := String "009" s.
+
+Eval compute in testStringParser "(foo(bar))" "foo(bar)" "".
+Eval compute in testStringParser "(foo((bar))" "" "". (* unclosed *)
+Eval compute in testStringParser "(foo(bar)))" "foo(bar)" ")".
+Eval compute in testStringParser "(fo\to(bar))" ("fo" ++ tab "o(bar)") "".
+Eval compute in testStringParser "(fo\ro(bar))" ("fo" ++ cr "o(bar)") "".
+Eval compute in testStringParser "(foo(bar)\()" "foo(bar)(" "".
+Eval compute in testStringParser "(foo\d(bar))" "" "". (* bad esc *)
+Eval compute in testStringParser "(foo\011(bar))" ("foo" ++ tab "(bar)") "".
+Eval compute in testStringParser ("("%string ++ cr "foo(bar))") (lf "foo(bar)") "". 
+Eval compute in testStringParser ("(" ++ lf "foo(bar))") (lf "foo(bar)") "".
+Eval compute in testStringParser ("(" ++ cr (lf "foo(bar))")) (lf (lf "foo(bar)")) "". (* XXX intended? XXX *)
+Eval compute in testStringParser ("(\" ++ cr "foo(bar))") "foo(bar)" "".
+Eval compute in testStringParser ("(\" ++ lf "foo(bar))") "foo(bar)" "".
+Eval compute in testStringParser ("(\" ++ cr (lf "foo(bar))")) "foo(bar)" "".
+
+
 
 Program Definition parse_name_char : parser ascii :=
   fun xs =>
@@ -449,6 +514,9 @@ Program Definition parse_name : parser string :=
     DO (_, xs')       <== (match_exactly "/") xs ;;
     DO (result, xs'') <== (many parse_name_char) xs' ;;
     SomeE (string_of_list result, exist _ (lift_base xs'') _).
+Next Obligation.
+  apply (sublist_trans H H0).
+Defined.
 
 Definition parse_null : parser PDF.PDFObject :=
   fun xs =>

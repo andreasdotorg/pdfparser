@@ -1,12 +1,25 @@
-%.vo: %.v
-	coqc $<
+.PHONY: all clean allcoq
 
-all: main
+Vm := parser pdfparser pdftype SfLib sublist
+Vs := $(Vm:%=%.v)
 
-parser.vo: SfLib.vo sublist.vo
-pdftype.vo: SfLib.vo
-sublist.vo: SfLib.vo
-pdfparser.vo: SfLib.vo parser.vo pdftype.vo
+all: allcoq main
+
+allcoq: Makefile.coq $(Vs)
+	make -f Makefile.coq all
+
+Makefile.coq: Makefile $(Vs)
+	coq_makefile $(Vs) -o Makefile.coq
+
+clean:
+	make -f Makefile.coq clean
+	rm Makefile.coq
+	echo "remaining: " *~ *.cmi *.cmo allparser.m* ? mai*
+	-rm *~ *.cmi *.cmo allparser.ml allparser.mli t main
+
+# dep rule: extraction depends on pdfparser.vo, which should depend on most coq files
+pdfparser.vo: allcoq
+
 parser.ml: pdfparser.vo
 parser.mli: pdfparser.vo
 allparser.ml: parser.ml preamble.ml pdfparser.vo
@@ -20,8 +33,6 @@ allparser.cmx: allparser.ml
 main: allparser.cmx main.ml
 	ocamlfind opt -package batteries -package batteries.syntax -syntax camlp4o -linkpkg allparser.cmx main.ml -o main
 
-
 t: t.ml
 	ocamlfind ocamlc -package batteries -package batteries.syntax -syntax camlp4o -linkpkg t.ml -o t
-clean:
-	-rm *.vo *.glob *~ *.cmi *.cmo allparser.ml allparser.mli t main
+
