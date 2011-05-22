@@ -505,7 +505,10 @@ Program Definition parse_name_char : parser ascii :=
         else
           NoneE "Illegal # encoding in name"
       | "000"::xs' => NoneE "Illegal null char in name"
-      | c::xs' => SomeE (c, exist _ xs' _)
+      | c::xs' => 
+        if isRegularCharacter c
+          then SomeE (c, exist _ xs' _)
+          else NoneE "not a name character"
       | [] => NoneE "End of string while parsing name char"
     end.
 
@@ -535,6 +538,7 @@ Program Definition parse_pdf_object : parser PDF.PDFObject :=
     OR DO (x, xs') <-- parse_number xs ;; SomeE (PDF.PDFNumber (PDF.Float x), xs')
     OR DO (x, xs') <-- parse_integer xs ;; SomeE (PDF.PDFNumber (PDF.Integer x), xs')
 (*  OR DO (x, xs') <-- parse_array xs ;; SomeE (x, xs') FIXME *)
+(*  OR DO (x, xs') <-- parse_dictionary xs ;; SomeE (x, xs') FIXME *)
     OR NoneE "parse error".
 
 Eval compute in parse_pdf_object (list_of_string "true").
@@ -552,14 +556,51 @@ Definition opt_ws {T:Set} (p : parser T) : parser (T) :=
 Program Definition parse_array : parser PDF.PDFObject :=
   fun xs =>
     DO (_, xs')       <== (match_exactly "[") xs ;;
-    DO (result, xs'') <== many (opt_ws parse_pdf_object) xs' ;;
-    DO (_, xs''')     <== (match_exactly "]") xs'' ;;
-    SomeE (PDF.PDFArray result, exist _ (lift_base xs'') _).
+    DO (result, xs'') <-- many (opt_ws parse_pdf_object) xs' ;;
+      DO (_, xs''')     <== opt_ws (match_exactly "]") xs'' ;;
+      SomeE (PDF.PDFArray result, exist _ (lift_base xs''') _)
+    OR DO (_, xs'')     <== opt_ws (match_exactly "]") xs' ;;
+      SomeE (PDF.PDFArray [], exist _ (lift_base xs'') _).
+Next Obligation.
+  admit.
+Defined.
 Next Obligation.
   admit.
 Defined.
 
-Eval compute in parse_array (list_of_string "[/foo (bar)]").
+Eval compute in parse_array (list_of_string "[]").
+Eval compute in parse_array (list_of_string "[ ]").
+Eval compute in parse_array (list_of_string "[/foo]").
+
+Program Fixpoint dict_from_list (l : list (string * PDF.PDFObject)) :=
+  match l with
+    | []     => PDF.DictEmpty
+    | x::l'  => PDF.NextEntry (fst x) (snd x) (dict_from_list l')
+  end.
+
+Program Definition parse_dictionary : parser PDF.PDFObject :=
+  fun xs =>
+    DO (_, xs')       <== (match_string "<<"%string) xs ;;
+    DO (result, xs'') <-- 
+      many (sequential (opt_ws parse_name) (opt_ws parse_pdf_object)) xs' ;;
+      DO (_, xs''')     <== opt_ws (match_string ">>"%string) xs'' ;;
+      SomeE (PDF.PDFDictionary (dict_from_list result), exist _ (lift_base xs''') _)
+    OR DO (_, xs'')     <== opt_ws (match_string ">>") xs' ;;
+      SomeE (PDF.PDFDictionary PDF.DictEmpty, exist _ (lift_base xs'') _).
+Next Obligation.
+  admit.
+Defined.
+Next Obligation.
+  admit.
+Defined.
+
+Eval compute in parse_dictionary (list_of_string "<<>>").
+Eval compute in parse_dictionary (list_of_string "<< >>").
+Eval compute in parse_dictionary (list_of_string "<< /foo 23>>").
+
+
+    
+
 
 Fixpoint skip_to_offset {T} (s : list T) (i : nat) :=
   match i with
