@@ -277,21 +277,36 @@ Definition lift_ascii
         | NoneE err => NoneE err
       end.
 
-Fixpoint match_string_helper (l : list ascii) : parser string :=
+Program Fixpoint match_list_inner (x : ascii) (rest : list ascii) : parser unit :=
   fun xs =>
-    match l with
-      | []       => NoneE "empty pattern not allowed"
-      | c::l'    => 
-        match l' with
-          | [] => lift_ascii (match_exactly c xs)
-          | c'::l'' 
-            => collapse_product (sequential (match_exactly c) 
-              (match_string_helper l') xs)
+    match match_exactly x xs with
+    | SomeE (_, exist xs' H) =>
+      match rest with
+      | [] => SomeE (tt, exist _ xs' _)
+      | (x'::rest') =>
+        match match_list_inner x' rest' xs' with
+        | SomeE (_, exist xs'' H') => SomeE (tt, exist _ xs'' _)
+        | NoneE err                => NoneE err
         end
+      end
+    | NoneE err => NoneE err
     end.
+Next Obligation.
+  apply (sublist_trans H' H).
+Defined.
 
-Definition match_string (s : string) : parser string :=
-  fun xs => match_string_helper (list_of_string s) xs.
+Program Definition match_list (l : list ascii) : parser unit :=
+  match l with
+  | []       => fun _ => NoneE "empty pattern not allowed"
+  | c::l'    => match_list_inner c l'
+  end.
+
+Program Definition match_string (s : string) : parser string :=
+  fun xs =>
+    match match_list (list_of_string s) xs with
+    | SomeE (_, exist xs' H) => SomeE (s, exist _ xs' _)
+    | NoneE err => NoneE err
+    end.
 
 Example match_string1 :
   exists e,

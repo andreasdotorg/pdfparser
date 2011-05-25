@@ -333,32 +333,34 @@ Local Notation "'fixExist' '(' t ')'" :=
   end.
 
 (* match balanced construct, using f to parse the inner content
-   the opening 'from' char is expected to be already consumed *)
-Program Fixpoint matchBalancedWith
+   the opening 'from' char is expected to be already consumed
+   enter and exit may transform the state *)
+Program Fixpoint matchBalancedWithST {ST : Type}
     (from until : ascii)
-    (f : list ascii -> forall xs0 : list ascii,
-        optionE (list ascii * {xs' : list ascii | sublist xs' xs0}))
-    (st : list ascii)
-    (xs : list ascii)
-    {measure (List.length xs)}
-    : optionE (list ascii * {xs' : list ascii | sublist xs' xs})
+    (f : ST -> forall xs0 : list ascii,
+        optionE (ST * {xs' : list ascii | sublist xs' xs0}))
+    (enter exit : (ST -> ST))
+    (st : ST)
+    (xs0 : list ascii)
+    {measure (List.length xs0)}
+    : optionE (ST * {xs' : list ascii | sublist xs' xs0})
     :=
-  match xs with
-  | nil    => NoneE "matchBalancedWith: unbalanced (empty list)"
-  | x::xs' =>
+  match xs0 with
+  | nil     => NoneE "matchBalancedWith: unbalanced (got nil)"
+  | (x::xs) =>
     match ascii_dec from x with
-    | left  _ => (* recurse *)
+    | left  _ =>
       (* run next level *)
-      match matchBalancedWith from until f ("("::st) xs' with
+      match matchBalancedWithST from until f enter exit (enter st) xs with
       | SomeE ret =>
         (* insert closing *)
         match ret with
-        | (st', exist xs'' H) =>
+        | (st', exist xs' H) =>
           (* run rest *)
-          match matchBalancedWith from until f (")"::st') xs'' with
+          match matchBalancedWithST from until f enter exit (exit st') xs' with
           | SomeE ret' =>
             match ret' with
-            | (st'', exist xs''' H') => SomeE (st'', exist _ xs''' _)
+            | (st'', exist xs'' H') => SomeE (st'', exist _ xs'' _)
             end
           | NoneE err  => NoneE err
           end
@@ -367,18 +369,18 @@ Program Fixpoint matchBalancedWith
       end
     | right _ =>
       match ascii_dec until x with
-      | left  _ => SomeE (st, exist _ xs' _)
+      | left  _ => SomeE (st, exist _ xs _)
       | right _ => (* sub-parser *)
         (* run sub-parser *)
-        match f st (x::xs') with
+        match f st (x::xs) with
         | SomeE ret =>
           match ret with
-          | (st', exist xs'' H) =>
+          | (st', exist xs' H) =>
             (* run rest *)
-            match matchBalancedWith from until f st' xs'' with
+            match matchBalancedWithST from until f enter exit st' xs' with
             | SomeE ret' =>
               match ret' with
-              | (st'', exist xs''' H) => SomeE (st'', exist _ xs''' _)
+              | (st'', exist xs'' H) => SomeE (st'', exist _ xs'' _)
               end
             | NoneE err  => NoneE err
             end
@@ -389,14 +391,10 @@ Program Fixpoint matchBalancedWith
     end
   end.
 Next Obligation.
-  pose proof (sl_tail x xs') as Ht.
-  pose proof (sublist_trans H Ht) as Hs.
-  apply (sublist__lt_length Hs).
+  apply (sublist__lt_length (sublist_trans H (sl_tail x _))).
 Defined.
 Next Obligation.
-  pose proof (sl_tail x xs') as Ht.
-  pose proof (sublist_trans H' H) as Ht'.
-  apply (sublist_trans Ht' Ht).
+  apply (sublist_trans H0 (sublist_trans H (sl_tail x _))).
 Defined.
 Next Obligation.
   apply (sublist__lt_length H).
@@ -404,6 +402,17 @@ Defined.
 Next Obligation.
   apply (sublist_trans H0 H).
 Defined.
+
+Program Definition matchBalancedWith
+    (from until : ascii)
+    (f : list ascii -> forall xs0 : list ascii,
+        optionE (list ascii * {xs' : list ascii | sublist xs' xs0}))
+    (st : list ascii)
+    (xs : list ascii)
+    : optionE (list ascii * {xs' : list ascii | sublist xs' xs})
+    :=
+  matchBalancedWithST from until f
+    (cons from) (cons until) st xs.
 
 Local Obligation Tactic :=
   program_simpl;
@@ -505,7 +514,14 @@ Program Definition parse_name_char : parser ascii :=
         else
           NoneE "Illegal # encoding in name"
       | "000"::xs' => NoneE "Illegal null char in name"
-      | c::xs' => SomeE (c, exist _ xs' _)
+      (* XXX spec somewhat exclude-ish-s all non-regular characters
+             i.e. d33 <= x <= d126 *)
+      (* XXX also, all delimiters shall end the token, i.e. no WS needed
+             between /foo and e.g. ] *)
+      | c::xs' =>
+        if isRegularCharacter c
+          then SomeE (c, exist _ xs' _)
+          else NoneE "non-regular character"
       | [] => NoneE "End of string while parsing name char"
     end.
 
@@ -525,7 +541,16 @@ Definition parse_null : parser PDF.PDFObject :=
       | NoneE err => NoneE err
     end.
 
-Program Definition parse_pdf_object : parser PDF.PDFObject :=
+Definition opt_ws {T:Set} (p : parser T) : parser (T) :=
+  fun xs =>
+    DO (val, xs') <== sequential_leftopt (many match_white) p xs ;; SomeE ((snd val), xs').
+
+Local Obligation Tactic :=
+  program_simpl;
+  simpl; intros;
+    try (repeat split; intros; intro C; inversion C; fail).
+
+Program Definition parse_simple_object : parser PDF.PDFObject :=
   fun xs =>
     DO (x, xs')    <-- parse_boolean xs ;; SomeE (x, xs')
     OR DO (x, xs') <-- parse_null xs ;; SomeE (x, xs')
@@ -534,32 +559,126 @@ Program Definition parse_pdf_object : parser PDF.PDFObject :=
     OR DO (x, xs') <-- parse_string xs ;; SomeE (PDF.PDFString x, xs')
     OR DO (x, xs') <-- parse_number xs ;; SomeE (PDF.PDFNumber (PDF.Float x), xs')
     OR DO (x, xs') <-- parse_integer xs ;; SomeE (PDF.PDFNumber (PDF.Integer x), xs')
-(*  OR DO (x, xs') <-- parse_array xs ;; SomeE (x, xs') FIXME *)
-    OR NoneE "parse error".
+    OR NoneE "not a simple PDFObject".
 
-Eval compute in parse_pdf_object (list_of_string "true").
-Eval compute in parse_pdf_object (list_of_string "false").
-Eval compute in parse_pdf_object (list_of_string "null").
-Eval compute in parse_pdf_object (list_of_string "/foo").
-Eval compute in parse_pdf_object (list_of_string "23").
-Eval compute in parse_pdf_object (list_of_string "<454647>").
-Eval compute in parse_pdf_object (list_of_string "(abc)").
+Program Definition dictionary_of_list
+    (l : list (string * PDF.PDFObject))
+    : optionE PDF.PDFObject
+    :=
+  match PDF.list2dict l PDF.DictEmpty with
+  | Some d => SomeE (PDF.PDFDictionary d)
+  | None   => NoneE "bad dictionary (duplicate or non-name key)"
+  end.
 
-Definition opt_ws {T:Set} (p : parser T) : parser (T) :=
-  fun xs =>
-    DO (val, xs') <== sequential_leftopt (many match_white) p xs ;; SomeE ((snd val), xs').
+(* When defining a Program Fixpoint, the current function cannot be
+    passed as a callback.  Doing this results in a more or less empty
+    context from which the sublist proof cannot be done.
 
-Program Definition parse_array : parser PDF.PDFObject :=
-  fun xs =>
-    DO (_, xs')       <== (match_exactly "[") xs ;;
-    DO (result, xs'') <== many (opt_ws parse_pdf_object) xs' ;;
-    DO (_, xs''')     <== (match_exactly "]") xs'' ;;
-    SomeE (PDF.PDFArray result, exist _ (lift_base xs'') _).
+    Thus, we inline array and dictionary parsing.
+
+    Many must be re-implemented locally as well... TODO
+*)
+
+Program Fixpoint parse_pdf_object
+    (xs : list ascii)
+    {measure (List.length xs)}
+    : optionE (PDF.PDFObject * {xs' : list ascii | sublist xs' xs})
+    :=
+    DO (x, xs')    <-- parse_simple_object xs ;; SomeE (x, xs')
+    OR
+      match xs with
+      | "["::xs'      => (* array code *)
+        match many (fun l => parse_pdf_object l) xs' with
+        | SomeE ret =>
+          match ret with
+          | (arr, exist xs'' H) =>
+            match opt_ws (match_exactly "]") xs'' with
+            | SomeE (_, exist xs''' H') => SomeE (PDF.PDFArray arr, exist _ xs''' _)
+            | NoneE err => NoneE err
+            end
+          end
+        | NoneE err =>
+          match opt_ws (match_exactly "]") xs' with
+          | SomeE ret =>
+            match ret with
+            | (_, exist xs'' H) => SomeE (PDF.PDFArray nil, exist _ xs'' _)
+            end
+          | NoneE err => NoneE err
+          end
+        end
+      | "<"::"<"::xs' =>
+        match many (opt_ws (
+            fun xs0 =>
+            match parse_name xs0 with
+            | SomeE (name, exist xs0' H) =>
+              match parse_pdf_object xs0' with
+              | SomeE (val, exist xs0'' H') => SomeE ((name, val), exist _ xs0'' _)
+              | NoneE err => NoneE err
+              end
+            | NoneE err => NoneE err
+            end
+            (* name; object ... *)
+            )) xs'
+        with
+        | SomeE (dic, exist xs'' H) =>
+          match opt_ws (match_list [">",">"]) xs'' with
+          | SomeE (_, exist xs''' H') =>
+            match dictionary_of_list (rev dic) with
+            | SomeE dic' => SomeE (dic', exist _ xs''' _)
+            | NoneE err => NoneE err
+            end
+          | NoneE err => NoneE err
+          end
+        | NoneE err =>
+          match opt_ws (match_list [">",">"]) xs' with
+          | SomeE (_, exist xs'' H) => SomeE (PDF.PDFDictionary PDF.DictEmpty, exist _ xs'' _)
+          | NoneE err => NoneE err
+          end
+        end
+      | x::xs'        =>
+        if isWhite x (* skip whitespace *)
+          then fixExist(parse_pdf_object xs')
+          else NoneE "PDFObject: no parse"
+      | _   => NoneE "PDFObject: no parse (got nil)"
+      end.
 Next Obligation.
   admit.
 Defined.
+Next Obligation.
+  apply (sublist_trans H' (sublist_trans H (sl_tail "[" _))).
+Defined.
+Next Obligation.
+  admit.
+Defined.
+Next Obligation.
+  admit.
+Defined.
+Next Obligation.
+  apply (sublist_trans H' (sublist_trans H (sublist_trans (sl_tail "<" _) (sl_tail "<" _)))).
+Defined.
 
-Eval compute in parse_array (list_of_string "[/foo (bar)]").
+(* tests *)
+
+Definition runTest {A} (p : parser A) (inp : string) : (optionE A) :=
+  match p (list_of_string inp) with
+  | SomeE (a,e) => SomeE a
+  | NoneE err   => NoneE err
+  end.
+
+Eval compute in runTest parse_pdf_object "true".
+Eval compute in runTest parse_pdf_object "false".
+Eval compute in runTest parse_pdf_object "null".
+Eval compute in runTest parse_pdf_object "/foo".
+Eval compute in runTest parse_pdf_object "23".
+Eval compute in runTest parse_pdf_object "<454647>".
+Eval compute in runTest parse_pdf_object "(abc)".
+
+Eval compute in runTest parse_pdf_object "[(bar) 23 (baz) <414243>]".
+Eval compute in runTest parse_pdf_object "[]".
+Eval compute in runTest parse_pdf_object "[ /foo ]".
+
+Eval compute in runTest parse_pdf_object "<< /foo (bar) /baz << >> /quux [ 5 ] >>".
+Eval compute in runTest parse_pdf_object "<< /foo (bar) /foo << >> >>".
 
 Fixpoint skip_to_offset {T} (s : list T) (i : nat) :=
   match i with
