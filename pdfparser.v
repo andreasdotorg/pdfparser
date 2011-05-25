@@ -514,14 +514,10 @@ Program Definition parse_name_char : parser ascii :=
         else
           NoneE "Illegal # encoding in name"
       | "000"::xs' => NoneE "Illegal null char in name"
-      (* XXX spec somewhat exclude-ish-s all non-regular characters
-             i.e. d33 <= x <= d126 *)
-      (* XXX also, all delimiters shall end the token, i.e. no WS needed
-             between /foo and e.g. ] *)
       | c::xs' =>
         if isRegularCharacter c
           then SomeE (c, exist _ xs' _)
-          else NoneE "non-regular character"
+          else NoneE "not a name character"
       | [] => NoneE "End of string while parsing name char"
     end.
 
@@ -559,7 +555,7 @@ Program Definition parse_simple_object : parser PDF.PDFObject :=
     OR DO (x, xs') <-- parse_string xs ;; SomeE (PDF.PDFString x, xs')
     OR DO (x, xs') <-- parse_number xs ;; SomeE (PDF.PDFNumber (PDF.Float x), xs')
     OR DO (x, xs') <-- parse_integer xs ;; SomeE (PDF.PDFNumber (PDF.Integer x), xs')
-    OR NoneE "not a simple PDFObject".
+    OR NoneE "internal: not a simple PDFObject".
 
 Program Definition dictionary_of_list
     (l : list (string * PDF.PDFObject))
