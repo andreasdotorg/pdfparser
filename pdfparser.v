@@ -589,12 +589,13 @@ Program Definition parse_stream_contents dict : parser string :=
                           (match_string (cr (lf "")))
                           xs1 ;;
         DO (data, xs3) <== some (Zabs_nat length) match_any xs2 ;;
-        DO (_, xs4) <== alternative 
-                          (match_string (lf "")) 
-                          (match_string (cr (lf "")))
+        DO (_, xs4) <== sequential_leftopt
+                          (alternative 
+                            (match_string (lf "")) 
+                            (match_string (cr (lf ""))))
+                          (match_string "endstream")
                           xs3 ;;
-        DO (_, xs5) <== match_string "endstream" xs4 ;;
-        SomeE (string_of_list data, xs5)
+        SomeE (string_of_list data, xs4)
       | _ => NoneE "I don't understand the length spec!"
     end.
 Next Obligation.
@@ -771,7 +772,8 @@ Definition parse_object_at xs offset :=
     | SomeE xs' => 
       match parse_indirect_object xs' with
         | NoneE err         => NoneE err
-        | SomeE (obj, xs'') => SomeE obj
+        | SomeE (PDF.PDFIndirect id gen obj, xs'') => SomeE obj
+        | _ => NoneE "not an indirect object specification"
       end
   end.
 
@@ -1002,11 +1004,25 @@ Definition is_evil obj :=
   match obj with
     | (PDF.PDFDictionary dict) =>
       match PDF.dictFindEntry dict "JavaScript" with
-        | None   => false
+        | None   => 
+          match PDF.dictFindEntry dict "S" with
+            | None => false
+            | Some (PDF.PDFName "JavaScript") => true
+            | Some (PDF.PDFName "Rendition")  => true
+            | _ => false
+          end
         | Some _ => true
       end
     | _ => false
   end.
+
+Eval compute in let obj := (runTest parse_pdf_object "1 0 obj << /S /JavaScript >> endobj") in
+  match obj with
+    | NoneE err => false
+    | SomeE obj => is_evil obj
+  end.
+
+
 
 Definition check_obj_from_entry xs table_entry :=
   let obj := get_obj_from_table_entry xs table_entry in
