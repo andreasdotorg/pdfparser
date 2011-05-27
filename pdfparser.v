@@ -998,11 +998,24 @@ Definition entry_get_gen table_entry :=
 Definition get_obj_from_table_entry xs table_entry :=
   parse_object_at xs (entry_get_offset table_entry).
 
+Definition is_evil obj :=
+  match obj with
+    | (PDF.PDFDictionary dict) =>
+      match PDF.dictFindEntry dict "JavaScript" with
+        | None   => false
+        | Some _ => true
+      end
+    | _ => false
+  end.
+
 Definition check_obj_from_entry xs table_entry :=
   let obj := get_obj_from_table_entry xs table_entry in
     match obj with
       | NoneE err => ("bad (parse error): " ++ err ++ (lf ""))%string
-      | SomeE obj => ("good" ++ (lf ""))%string
+      | SomeE obj => if is_evil obj then
+          ("evil" ++ (lf ""))%string
+        else
+          ("good" ++ (lf ""))%string
     end.
 
 Fixpoint check_table xs table :=
