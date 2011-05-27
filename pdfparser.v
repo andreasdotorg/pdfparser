@@ -541,6 +541,16 @@ Definition opt_ws {T:Set} (p : parser T) : parser (T) :=
   fun xs =>
     DO (val, xs') <== sequential_leftopt (many match_white) p xs ;; SomeE ((snd val), xs').
 
+Program Definition parse_indirect_ref : parser PDF.PDFObject :=
+  fun xs =>
+    DO (number, xs') <== parse_nat xs ;;
+    DO (gen, xs'')   <== opt_ws parse_nat xs' ;;
+    DO (_, xs''')    <== opt_ws (match_exactly "R") xs'' ;;
+    SomeE (PDF.PDFReference number gen, xs''').
+Next Obligation.
+  apply (sublist_trans H (sublist_trans H0 H1)).  
+Defined.
+
 Local Obligation Tactic :=
   program_simpl;
   simpl; intros;
@@ -553,6 +563,7 @@ Program Definition parse_simple_object : parser PDF.PDFObject :=
     OR DO (x, xs') <-- parse_name xs ;; SomeE (PDF.PDFName x, xs')
     OR DO (x, xs') <-- parse_hex_string xs ;; SomeE (PDF.PDFString x, xs')
     OR DO (x, xs') <-- parse_string xs ;; SomeE (PDF.PDFString x, xs')
+    OR DO (x, xs') <-- parse_indirect_ref xs ;; SomeE (x, xs')
     OR DO (x, xs') <-- parse_number xs ;; SomeE (PDF.PDFNumber (PDF.Float x), xs')
     OR DO (x, xs') <-- parse_integer xs ;; SomeE (PDF.PDFNumber (PDF.Integer x), xs')
     OR NoneE "internal: not a simple PDFObject".
@@ -565,6 +576,45 @@ Program Definition dictionary_of_list
   | Some d => SomeE (PDF.PDFDictionary d)
   | None   => NoneE "bad dictionary (duplicate or non-name key)"
   end.
+
+(* still broken, FIXME *)
+Program Definition parse_stream_contents dict : parser string :=
+  fun xs =>
+    match PDF.dictFindEntry dict "Length" with
+      | None => NoneE "error parsing stream: no length in stream dict"
+      | Some (PDF.PDFNumber (PDF.Integer length)) =>
+        DO (_, xs1)  <== match_string "stream" xs ;;
+        DO (_, xs2) <== alternative 
+                          (match_string (lf "")) 
+                          (match_string (cr (lf "")))
+                          xs1 ;;
+        DO (data, xs3) <== some (Zabs_nat length) match_any xs2 ;;
+        DO (_, xs4) <== alternative 
+                          (match_string (lf "")) 
+                          (match_string (cr (lf "")))
+                          xs3 ;;
+        DO (_, xs5) <== match_string "endstream" xs4 ;;
+        SomeE (string_of_list data, xs5)
+      | _ => NoneE "I don't understand the length spec!"
+    end.
+Next Obligation.
+  eauto.
+Defined.  
+
+Definition parse_stream_contents_aux obj : parser string :=
+  fun xs =>
+    match obj with
+      | PDF.PDFDictionary dic => parse_stream_contents dic xs
+      | _ => NoneE "no stream dictionary found"
+    end.
+
+
+
+(*
+Eval compute in parse_stream_contents 
+  (PDF.NextEntry "length"%string (PDF.PDFNumber (PDF.Integer 1)) PDF.DictEmpty)
+  ("stream"++lf++"1"++lf++"endstream")%string.
+*)
 
 (* When defining a Program Fixpoint, the current function cannot be
     passed as a callback.  Doing this results in a more or less empty
@@ -620,7 +670,7 @@ Program Fixpoint parse_pdf_object
           match opt_ws (match_list [">",">"]) xs'' with
           | SomeE (_, exist xs''' H') =>
             match dictionary_of_list (rev dic) with
-            | SomeE dic' => SomeE (dic', exist _ xs''' _)
+            | SomeE dic' => (* insert stream parser here? no... *) SomeE (dic', exist _ xs''' _)
             | NoneE err => NoneE err
             end
           | NoneE err => NoneE err
@@ -675,6 +725,36 @@ Eval compute in runTest parse_pdf_object "[ /foo ]".
 
 Eval compute in runTest parse_pdf_object "<< /foo (bar) /baz << >> /quux [ 5 ] >>".
 Eval compute in runTest parse_pdf_object "<< /foo (bar) /foo << >> >>".
+Eval compute in runTest parse_pdf_object "<< /foo 23 5 R >>".
+
+Definition parse_fail {T : Set} : parser T :=
+  fun xs =>
+    NoneE "always fail".
+
+Program Definition parse_indirect_object : parser PDF.PDFObject :=
+  fun xs =>
+    DO (number, xs1) <== parse_nat xs ;;
+    DO (gen, xs2)    <== opt_ws parse_nat xs1 ;;
+    DO (_, xs3)      <== opt_ws (match_string "obj") xs2 ;;
+    DO (obj, xs4)    <== opt_ws parse_pdf_object xs3 ;;
+    DO (_, xs5)      <-- opt_ws (match_string "endobj") xs4 ;; SomeE (PDF.PDFIndirect number gen obj, xs5)
+    OR DO (stream, xs5) <== opt_ws (parse_stream_contents_aux obj) xs4 ;;
+      DO (_, xs6)       <== opt_ws (match_string "endobj") xs5 ;; 
+      SomeE (PDF.PDFIndirect number gen obj, xs6).
+Next Obligation.
+  eauto.
+Defined.
+Next Obligation.
+  eauto 6.
+Defined.
+
+Eval compute in runTest parse_indirect_object "1 0 obj
+ <<  /Type /Catalog
+      /Outlines 2 0 R
+      /Pages 3 0 R
+  >>
+endobj
+".
 
 Fixpoint skip_to_offset {T} (s : list T) (i : nat) :=
   match i with
@@ -683,6 +763,16 @@ Fixpoint skip_to_offset {T} (s : list T) (i : nat) :=
                  | []   => NoneE "Illegal offset"
                  | h::t => skip_to_offset t n
                end
+  end.
+
+Definition parse_object_at xs offset :=
+  match skip_to_offset xs offset with
+    | NoneE err => NoneE err
+    | SomeE xs' => 
+      match parse_indirect_object xs' with
+        | NoneE err         => NoneE err
+        | SomeE (obj, xs'') => SomeE obj
+      end
   end.
 
 Definition list_last_n {T} (xs : list T) (i : nat) :=
@@ -752,12 +842,6 @@ Program Definition parse_xref_table_section : parser (nat*list Xref_entry) :=
 
 Inductive Xref_table_entry : Set :=
   | table_entry : nat -> Xref_entry -> Xref_table_entry.
-
-(*
-Inductive Xref_table : Set :=
-  | empty_table : Xref_table
-  | next_entry : Xref_table_entry -> Xref_table -> Xref_table.
-*)
 
 Fixpoint build_xref_table_aux base entries table :=
   match entries with
@@ -872,6 +956,61 @@ Fixpoint print_xref_table l :=
     | e::l' => ((print_xref_table_entry e) ++ crlf ++ (print_xref_table l'))%string
   end.
 
+Fixpoint get_object id gen table xs :=
+  match table with
+    | []        => NoneE "object not in table"
+    | e::table' => match e with
+                     | (table_entry id' e) =>
+                       match e with
+                         | (InUse offset gen') =>
+                           if andb (beq_nat id id') (beq_nat gen gen') then
+                             parse_object_at xs offset
+                             else get_object id gen table' xs
+                         | (Free _ _ ) => get_object id gen table' xs
+                       end
+                   end
+  end.
+
+Definition entry_get_id table_entry :=
+  match table_entry with
+    | (table_entry id e) => id
+  end.
+
+(* assuming InUse entry always, FIXME *)
+Definition entry_get_offset table_entry :=
+  match table_entry with
+    | (table_entry id e) =>
+      match e with
+        | (InUse offset gen) => offset
+        | (Free offset gen)  => offset
+      end
+  end.
+
+Definition entry_get_gen table_entry :=
+  match table_entry with
+    | (table_entry id e) =>
+      match e with
+        | (InUse offset gen) => gen
+        | (Free offset gen)  => gen
+      end
+  end.
+
+Definition get_obj_from_table_entry xs table_entry :=
+  parse_object_at xs (entry_get_offset table_entry).
+
+Definition check_obj_from_entry xs table_entry :=
+  let obj := get_obj_from_table_entry xs table_entry in
+    match obj with
+      | NoneE err => ("bad (parse error): " ++ err ++ (lf ""))%string
+      | SomeE obj => ("good" ++ (lf ""))%string
+    end.
+
+Fixpoint check_table xs table :=
+  match table with
+    | []        => ""%string
+    | e::table' => ((check_obj_from_entry xs e) ++ (check_table xs table'))%string
+  end.
+
 (*
 Eval compute in parse_xref_entry (list_of_string "0000000005 00002 f "%string).
 
@@ -908,7 +1047,7 @@ indirect object
 Definition main (xs : list ascii) :=
   match read_xref_table xs with
     | NoneE err   => NoneE ("Error: "%string ++ err)
-    | SomeE table => SomeE (print_xref_table table)
+    | SomeE table => SomeE (check_table xs table)
   end.
 
 

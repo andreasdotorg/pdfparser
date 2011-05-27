@@ -32,11 +32,14 @@ Inductive PDFObject : Set :=
   | PDFName : string -> PDFObject
   | PDFArray : list PDFObject -> PDFObject
   | PDFDictionary : DictEntry -> PDFObject
-  | PDFStream : string -> PDFObject
+  | PDFStream : DictEntry -> string -> PDFObject
   | PDFNull : PDFObject
+  | PDFIndirect : nat -> nat -> PDFObject -> PDFObject
+  | PDFReference : nat -> nat -> PDFObject
+(*
   | PDFIndirect : positive -> Zpos0 -> PDFObject -> PDFObject
   | PDFReference : positive -> Zpos0 -> PDFObject
-
+*)
 with DictEntry : Set :=
   | DictEmpty : DictEntry
   | NextEntry : string -> PDFObject -> DictEntry -> DictEntry.
