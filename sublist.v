@@ -1,6 +1,8 @@
 (** * Internals *)
 
-Require Import SfLib.
+Require Import Coq.Arith.Arith.
+Require Import Omega.
+Require Import Coq.Lists.List.
 
 Open Scope list_scope.
 
@@ -40,7 +42,8 @@ Section length_measure.
     Theorem lt_length_asym : lt_length l l' -> ~ lt_length l' l.
     Proof.  apply lt_asym.  Qed.
 
-    Theorem lt_length_trans : lt_length l l' -> lt_length l' l'' -> lt_length l l''.
+    Theorem lt_length_trans :
+        lt_length l l' -> lt_length l' l'' -> lt_length l l''.
     Proof.  apply lt_trans.  Qed.
 
     Theorem lt_length_not_nil : lt_length l l' -> l' <> nil.
@@ -88,7 +91,8 @@ Section true_sublist.
         apply lt_length_cons; assumption.
     Qed.
 
-    Lemma sublist_longer : forall l l', List.length l' > List.length l -> ~ sublist l' l.
+    Lemma sublist_longer :
+        forall l l', List.length l' > List.length l -> ~ sublist l' l.
     Proof.
       intros l l' H C.
       apply sublist__lt_length in C.
@@ -98,7 +102,7 @@ Section true_sublist.
     Theorem sublist_not_nil : forall l l', sublist l l' -> l' <> nil.
     Proof.  induction l'; [ inversion 1 | intros _ C; inversion C].  Qed.
 
-    Theorem sublist_nil : forall c l, sublist [] (c::l).
+    Theorem sublist_nil : forall c l, sublist nil (c::l).
     Proof.
       intros c l; generalize dependent c.
       induction l; intros.
@@ -106,7 +110,8 @@ Section true_sublist.
         constructor; apply IHl.
     Qed.
 
-    Theorem sublist_tails : forall c d l l', sublist (c::l) (d::l') -> sublist l l'.
+    Theorem sublist_tails :
+        forall c d l l', sublist (c::l) (d::l') -> sublist l l'.
     Proof.
       intros c d l l'; generalize dependent l;
       generalize dependent d; generalize dependent c.
@@ -146,7 +151,8 @@ Section true_sublist.
   End sublist_order.
 
   (* additional pseudo-constructor *)
-  Theorem sl_minus : forall (c : A) {l' l}, sublist (c::l') l -> sublist l' l.
+  Theorem sl_minus :
+      forall (c : A) {l' l}, sublist (c::l') l -> sublist l' l.
   Proof.
     intros; destruct l.
       inversion H.
