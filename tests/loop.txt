@@ -1,0 +1,53 @@
+%PDF-1.7
+%Á∑·∂
+% vim: set tw=76 ts=2 et :
+% convert with:
+% ./fixlengths < hello.txt > hello.pdf ; ./genxref hello.pdf
+1 0 obj
+  <<  /Type /Catalog
+      /Outlines 6 0 R
+      /Pages 2 0 R
+  >>
+endobj
+
+2 0 obj
+  <<  /Type /Pages
+      /Kids [3 0 R]
+      /Count 1
+  >>
+endobj
+
+3 0 obj
+  <<  /Type /Page
+      /Parent 2 0 R
+      /MediaBox [0 0 595.276 841.89]
+      /Contents 4 0 R
+      /Resources <<
+        /ProcSet [/PDF /Text]
+        /Font << /F1 5 0 R >>
+        >>
+  >>
+endobj
+
+4 0 obj
+  <<  /Length FIXME  >>
+stream
+  BT 80 100 Td /F1 48 Tf (foo) Tj ET
+endstream
+endobj
+
+5 0 obj
+  <<  /Type /Font
+      /Subtype /Type1
+      /Name /F1
+      /BaseFont /Helvetica
+      /Encoding /MacRomanEncoding
+  >>
+endobj
+
+6 0 obj
+  <<  /Type /Outlines
+      /Count 0
+  >>
+endobj
+
