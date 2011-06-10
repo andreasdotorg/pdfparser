@@ -298,6 +298,17 @@ Ltac xref_solver :=
 Local Obligation Tactic := xref_solver.
 
 (* \ has already been parsed away *)
+Program Definition parse_char_string_escape_oct : parser ascii :=
+  fun xs =>
+    match xs with
+      | d1::d2::d3::xs' => 
+        if andb (andb (isOctal d1) (isOctal d2)) (isOctal d3) then 
+          SomeE (ascii_of_nat(nat_of_digit(d1) * 64 + nat_of_digit(d2) * 8 + nat_of_digit(d3)), exist _ xs' _)
+          else
+            NoneE "Illegal escape character"
+      | _  => NoneE "Illegal escape character"
+    end.
+
 Program Definition parse_char_string_escape : parser ascii :=
   fun xs =>
     match xs with
@@ -310,12 +321,7 @@ Program Definition parse_char_string_escape : parser ascii :=
       | "("::xs'        => SomeE ("(", exist _ xs' _)
       | ")"::xs'        => SomeE (")", exist _ xs' _)
       | "\"::xs'        => SomeE ("\", exist _ xs' _)
-      | d1::d2::d3::xs' => 
-        if andb (andb (isOctal d1) (isOctal d2)) (isOctal d3) then 
-          SomeE (ascii_of_nat(nat_of_digit(d1) * 64 + nat_of_digit(d2) * 8 + nat_of_digit(d3)), exist _ xs' _)
-          else
-            NoneE "Illegal escape character"
-      | _        => NoneE "Illegal escape character"
+      | xs0             => parse_char_string_escape_oct xs0
     end.
 
 Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 

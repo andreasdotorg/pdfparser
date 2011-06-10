@@ -1,6 +1,7 @@
 *~
 *.glob
 *.vo
+*.v.d
 *.cmi
 *.cmo
 parser.ml
