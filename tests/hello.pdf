@@ -1,6 +1,8 @@
 %PDF-1.7
 %Á∑·∂
 % vim: set tw=76 ts=2 et :
+% convert with:
+% ./fixlengths < hello.txt > hello.pdf ; ./genxref hello.pdf
 1 0 obj
   <<  /Type /Catalog
       /Outlines 2 0 R
@@ -116,22 +118,22 @@ endobj
 
 % a circle shape
 9 0 obj
-  <<  /Type /XObject 
-      /Subtype /Form 
-      /FormType 1 
-      /BBox [ -100 -100 100 100 ] 
-      /Matrix [ 1 0 0 1 0 0 ] 
-      /Resources << /ProcSet [ /PDF ] >> 
-      /Length 185
-  >> 
-stream 
+  <<  /Type /XObject
+      /Subtype /Form
+      /FormType 1
+      /BBox [ -100 -100 100 100 ]
+      /Matrix [ 1 0 0 1 0 0 ]
+      /Resources << /ProcSet [ /PDF ] >>
+      /Length 184
+  >>
+stream
   -100 0 m
   -100 55.228     -55.228 100   0 100   c
   55.228 100      100 55.228    100 0   c
   100 -55.228     55.228 -100   0 -100  c
   -55.228 -100    -100 -55.228  -100 0  c
   h B
-endstream 
+endstream
 endobj
 
 6 0 obj
@@ -157,22 +159,21 @@ endobj
 endobj
 
 xref
-0 10 
-0000000000 65535 f 
-0000000048 00000 n 
-0000000131 00000 n 
-0000000189 00000 n 
-0000000264 00000 n 
-0000000561 00000 n 
-0000002393 00000 n 
-0000002424 00000 n 
-0000002562 00000 n 
-0000001978 00000 n 
+0 10
+0000000000 65535 f
+0000000125 00000 n
+0000000208 00000 n
+0000000266 00000 n
+0000000341 00000 n
+0000000638 00000 n
+0000002461 00000 n
+0000002492 00000 n
+0000002630 00000 n
+0000002055 00000 n
 
 trailer
-  <<  /Size 10 
+  <<  /Size 10
       /Root 1 0 R
   >>
 startxref
-2702 
-%%EOF
+2770%%EOF

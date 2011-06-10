@@ -118,22 +118,22 @@ endobj
 
 % a circle shape
 9 0 obj
-  <<  /Type /XObject 
-      /Subtype /Form 
-      /FormType 1 
-      /BBox [ -100 -100 100 100 ] 
-      /Matrix [ 1 0 0 1 0 0 ] 
-      /Resources << /ProcSet [ /PDF ] >> 
+  <<  /Type /XObject
+      /Subtype /Form
+      /FormType 1
+      /BBox [ -100 -100 100 100 ]
+      /Matrix [ 1 0 0 1 0 0 ]
+      /Resources << /ProcSet [ /PDF ] >>
       /Length FIXME
-  >> 
-stream 
+  >>
+stream
   -100 0 m
   -100 55.228     -55.228 100   0 100   c
   55.228 100      100 55.228    100 0   c
   100 -55.228     55.228 -100   0 -100  c
   -55.228 -100    -100 -55.228  -100 0  c
   h B
-endstream 
+endstream
 endobj
 
 6 0 obj

@@ -148,7 +148,7 @@ function readobj()
     -- read object version
     local ver = manyOne(isSpace) and readNumber()
     if not ver then return end
-    if manyOne(isSpace) and (force 'o') and (force 'b') and (force 'j') and manyOne(isSpace) then
+    if manyOne(isSpace) and (force 'o') and (force 'b') and (force 'j') and many(isSpace) then
         -- is valid object start, save
         table.insert(objects, {pos0,oid,ver})
     end
@@ -175,16 +175,17 @@ end
 
 function makeXref()
     -- xref table string
-    local s = [[
-xref
-0 ]].. tostring(#objects+1) ..[[ 
-0000000000 65535 f 
+    local s =
+[[xref
+0 ]].. tostring(#objects+1) ..[[
+
+0000000000 65535 f
 ]]
     -- object table
     obj = {}
     -- add object entries
     for k,v in pairs(objects) do
-        obj[v[2]] = string.format("%010d %05d n \n",v[1],v[3])
+        obj[v[2]] = string.format("%010d %05d n\n",v[1],v[3])
     end
     return s .. table.concat(obj)
 end
@@ -193,11 +194,12 @@ function makeTrailer()
     local xpos = pos
     local trailer = [[
 trailer
-  <<  /Size ]].. tostring(#objects+1) ..[[ 
+  <<  /Size ]].. tostring(#objects+1) ..[[
+
       /Root 1 0 R
   >>
 startxref
-]]..tostring(xpos)..[[ 
+]]..tostring(xpos)..[[
 %%EOF
 ]]
     local xrefs = makeXref()
