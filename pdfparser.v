@@ -897,24 +897,56 @@ Fixpoint not_in_limited_list_aux x (l : list nat)  i :=
 Definition not_in_limited_list {max} (l : limited_list max) :=
   not_in_limited_list_aux max (proj1_sig l) 0.
 
-(*
+
+Theorem niil_S:
+  forall x l i,
+        S (not_in_limited_list_aux x l i) = not_in_limited_list_aux x l (S i).
+Proof.
+  intros x l.
+  induction x. reflexivity.
+  simpl. remember (existsb (beq_nat x) l) as H.  destruct H; intro i; apply IHx.
+Qed.
 
 Theorem cons__list_foo :
-  forall x,
-    forall n,
-      forall l,
-        forall i,
-          n < x ->
-            existsb (beq_nat n) l = true ->
-              not_in_limited_list_aux x l i = not_in_limited_list_aux x (n::l) i.
+  forall x n l i,
+          existsb (beq_nat n) l = true ->
+            not_in_limited_list_aux x l i = not_in_limited_list_aux x (n::l) i.
 Proof.
   intros.
-  induction x. reflexivity.
-  simpl.
-  destruct (existsb (beq_nat x) l). 
-  destruct (beq_nat x n). simpl. 
+  induction i. 
+    induction x. reflexivity.
+    simpl. remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB. subst. simpl. rewrite H. exact IHx.
+    simpl. remember (existsb (beq_nat x) l) as B. destruct B. exact IHx.
+    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHx.
+    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHi.
+Qed.
+
+Theorem cons__list_foo2 :
+  forall x n l i,
+    n < x ->
+      existsb (beq_nat n) l = false ->
+        S (not_in_limited_list_aux x l i) = not_in_limited_list_aux x (n::l) i.
+Proof.
+  intros.
+  induction i. generalize dependent n. 
+    induction x. intros. inversion H.
+    intros. simpl. remember (existsb (beq_nat x) l) as B. destruct B. rewrite orb_true_r. 
+    assert (n <> x). unfold not. intros. subst. rewrite H0 in HeqB. inversion HeqB. 
+    assert (n < x). clear - H H1. inversion H. contradiction (H1 H2). unfold lt. exact H2.
+    apply (IHx _ H2 H0).
+    remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB0. subst. simpl. 
+    
+
+reflexivity.
+    simpl. remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB. subst. simpl. rewrite H. exact IHx.
+    simpl. remember (existsb (beq_nat x) l) as B. destruct B. exact IHx.
+    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHx.
+    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHi.
+Qed.
+
+
   
-  
+(*
 
 Theorem cons_to_list_exist_true :
     forall max,
