@@ -324,9 +324,6 @@ Program Definition parse_char_string_escape : parser ascii :=
       | xs0             => parse_char_string_escape_oct xs0
     end.
 
-Definition lift_base {A : Type} {P : A -> Prop} (s : sig P) := 
-  match s with | exist a b => a end.
-
 Local Obligation Tactic := program_simpl.
 
 Local Notation "'fixExist' '(' t ')'" :=
@@ -531,7 +528,7 @@ Program Definition parse_name : parser string :=
   fun xs =>
     DO (_, xs')       <== (match_exactly "/") xs ;;
     DO (result, xs'') <== (many parse_name_char) xs' ;;
-    SomeE (string_of_list result, exist _ (lift_base xs'') _).
+    SomeE (string_of_list result, exist _ (proj1_sig xs'') _).
 Next Obligation.
   apply (sublist_trans H H0).
 Defined.
@@ -799,8 +796,8 @@ Definition rev_string (s : string) :=
 Definition find_xref_offset (xs : list ascii) :=
   let rxs := rev (list_last_n xs 100) in
     DO (_, rxs')    <== opt_ws (match_string (rev_string "%%EOF"%string)) rxs ;;
-    DO (val, rxs'') <== opt_ws (many match_digit) (lift_base rxs') ;;
-    DO (_, _)       <== opt_ws (match_string (rev_string "startxref"%string)) (lift_base rxs'') ;;
+    DO (val, rxs'') <== opt_ws (many match_digit) (proj1_sig rxs') ;;
+    DO (_, _)       <== opt_ws (match_string (rev_string "startxref"%string)) (proj1_sig rxs'') ;;
     DO (val',_)     <== parse_nat (rev val) ;;
     SomeE val'.
 
@@ -831,21 +828,21 @@ Local Obligation Tactic := xref_solver'.
 Program Definition parse_xref_entry : parser Xref_entry :=
   fun xs =>
   DO (offset, xs')      <== opt_ws (some 10 match_digit) xs ;;
-  DO (generation, xs'') <== opt_ws (some 5 match_digit) (lift_base xs') ;;
-  DO (type, xs''')      <== opt_ws match_any (lift_base xs'') ;;
+  DO (generation, xs'') <== opt_ws (some 5 match_digit) (proj1_sig xs') ;;
+  DO (type, xs''')      <== opt_ws match_any (proj1_sig xs'') ;;
   DO (offset', _)       <== parse_nat offset ;;
   DO (generation', _)   <== parse_nat generation ;;
   match type with
-    | "n" => SomeE (InUse offset' generation', exist _ (lift_base xs''') _)
-    | "f" => SomeE (Free offset' generation', exist _ (lift_base xs''') _)
+    | "n" => SomeE (InUse offset' generation', exist _ (proj1_sig xs''') _)
+    | "f" => SomeE (Free offset' generation', exist _ (proj1_sig xs''') _)
     | _   => NoneE "Invalid xref entry type"
   end.
 
 Program Definition parse_xref_table_section : parser (nat*list Xref_entry) :=
   fun xs =>
   DO (startoffset, xs') <== opt_ws parse_nat xs ;;
-  DO (entrynum, xs'')   <== opt_ws parse_nat (lift_base xs') ;;
-  DO (entries, xs''')   <== some entrynum parse_xref_entry (lift_base xs'') ;;
+  DO (entrynum, xs'')   <== opt_ws parse_nat (proj1_sig xs') ;;
+  DO (entries, xs''')   <== some entrynum parse_xref_entry (proj1_sig xs'') ;;
   SomeE ((startoffset, entries), xs''').
 
 Inductive Xref_table_entry : Set :=
@@ -864,21 +861,256 @@ Fixpoint build_xref_table sections table :=
   end.
 
 Definition parse_xref_table (xs : list ascii) :=
-  DO (_, xs')         <== opt_ws (match_string "xref"%string) xs ;;
-  DO (sections, xs'') <== opt_ws (many parse_xref_table_section) (lift_base xs') ;;
-  SomeE (build_xref_table sections []).
+  DO (_, xs1)        <== opt_ws (match_string "xref"%string) xs ;;
+  DO (sections, xs2) <== opt_ws (many parse_xref_table_section) (proj1_sig xs1) ;;
+  DO (_, xs3)        <== opt_ws (match_string "trailer"%string) (proj1_sig xs2) ;;
+  DO (trailer , xs4) <== opt_ws parse_pdf_object (proj1_sig xs3) ;;
+  SomeE (build_xref_table sections [], trailer).
 
 (* Eval compute in parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string). *)
 
-Definition find_and_parse_xref_table (xs : list ascii) :=
+Fixpoint In_sig {A:Type} {B:Prop} (a:A) (l:list {A|B}) :=
+  match l with
+    | nil => False
+    | b :: m => (proj1_sig b) = a \/ In_sig a m
+  end.
+
+Check List.existsb.
+
+Check beq_nat.
+
+Definition limited_list max := {l : list nat | forall x, In x l -> x < max}.
+
+Program Definition limited_list_cons {max} (x : {x' : nat| x' < max}) (l : limited_list max) 
+  : limited_list max :=
+  exist _ ((proj1_sig x)::(proj1_sig l)) _.
+Next Obligation.
+  destruct H. subst. exact H0.
+  destruct l. simpl in H. apply l. exact H.
+Defined.
+
+Definition exists_in_list {max} x (l : limited_list max) :=
+  existsb (beq_nat x) (proj1_sig l).
+
+Fixpoint not_in_limited_list_aux x (l : list nat)  i :=
+  match x with
+    | 0      => i
+    | (S x') => 
+      not_in_limited_list_aux x' l 
+        (i + (if existsb (beq_nat x') l then 0 else 1))
+  end.
+
+Definition not_in_limited_list {max} (l : limited_list max) :=
+  not_in_limited_list_aux max (proj1_sig l) 0.
+
+
+Theorem niil_S:
+  forall x l i,
+        S (not_in_limited_list_aux x l i) = not_in_limited_list_aux x l (S i).
+Proof.
+  intros x l.
+  induction x. reflexivity.
+  simpl. remember (existsb (beq_nat x) l) as H.  destruct H; intro i; apply IHx.
+Qed.
+
+Theorem cons__list_foo :
+  forall x n l i,
+          existsb (beq_nat n) l = true ->
+            not_in_limited_list_aux x l i = not_in_limited_list_aux x (n::l) i.
+Proof.
+  intros.
+  induction i. 
+    induction x. reflexivity.
+    simpl. remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB. subst. simpl. rewrite H. exact IHx.
+    simpl. remember (existsb (beq_nat x) l) as B. destruct B. exact IHx.
+    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHx.
+    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHi.
+Qed.
+
+Theorem cons__list_foo2 :
+  forall x n l i,
+    n < x ->
+      existsb (beq_nat n) l = false ->
+        S (not_in_limited_list_aux x l i) = not_in_limited_list_aux x (n::l) i.
+Proof.
+  intros.
+  induction i. generalize dependent n. 
+    induction x. intros. inversion H.
+    intros. simpl. remember (existsb (beq_nat x) l) as B. destruct B. rewrite orb_true_r. 
+    assert (n <> x). unfold not. intros. subst. rewrite H0 in HeqB. inversion HeqB. 
+    assert (n < x). clear - H H1. inversion H. contradiction (H1 H2). unfold lt. exact H2.
+    apply (IHx _ H2 H0).
+    remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB0. subst. simpl. 
+    
+
+reflexivity.
+    simpl. remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB. subst. simpl. rewrite H. exact IHx.
+    simpl. remember (existsb (beq_nat x) l) as B. destruct B. exact IHx.
+    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHx.
+    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHi.
+Qed.
+
+
+  
+(*
+
+Theorem cons_to_list_exist_true :
+    forall max,
+      forall l : limited_list max,
+        forall x : {x' : nat| x' < max},
+          exists_in_list (proj1_sig x) (limited_list_cons x l) = true.
+Proof.
+  intros. 
+  unfold limited_list_cons. unfold exists_in_list. unfold existsb. simpl. 
+  rewrite <- beq_nat_refl. reflexivity. 
+Qed.
+
+Theorem empty_list_is_limited :
+  forall max,
+    exists l : limited_list max,
+      (proj1_sig l) = [].
+Proof.
+  intros. unfold limited_list. intros.
+  eexists. unfold proj1_sig. simpl. 
+
+
+Theorem cons_to_empty_list :
+  forall max,
+    forall l : limited_list max,
+      (proj1_sig l) = [] -> not_in_limited_list l = max. 
+Proof.
+  intros.
+  cbv. cbv in H.
+  unfold not_in_limited_list. cbv. simpl. unfold not_in_limited_list_aux. unfold exists_in_list. cbv. simpl. 
+
+
+Theorem cons_to_empty_list :
+    forall max,
+      forall l : limited_list max,
+        forall x y i : {x' : nat| x' < max},
+          exists_in_list (proj1_sig x) l = true ->
+            not_in_limited_list_aux (proj1_sig y) (limited_list_cons x l) (proj1_sig i) 
+              = not_in_limited_list_aux (proj1_sig y) l (proj1_sig i).
+Proof.
+  intros.
+  induction (proj1_sig y).
+  unfold not_in_limited_list_aux. reflexivity.
+  unfold not_in_limited_list_aux. 
+  destruct (beq_nat n (proj1_sig x)).
+
+Theorem cons_to_empty_list :
+    forall max,
+      forall l : limited_list max,
+        forall x : {x' : nat| x' < max},
+          (proj1_sig l) = [] ->
+            (S (not_in_limited_list (limited_list_cons x l))) = not_in_limited_list l.
+Proof.
+  intros.
+  induction l. destruct H. 
+  unfold not_in_limited_list. unfold not_in_limited_list_aux. unfold limited_list_cons.
+  fold limited_list_aux. 
+simpl. 
+
+Theorem add_existing_item_to_list :
+    forall max,
+      forall l : limited_list max,
+        forall x : {x' : nat| x' < max},
+          exists_in_list (proj1_sig x) l = true ->
+            not_in_limited_list (limited_list_cons x l) = not_in_limited_list l.
+Proof.
+  intros.
+  induction x.
+  unfold not_in_limited_list. unfold not_in_limited_list_aux. unfold not_in_limited_list_aux. unfold limited_list_cons. simpl. 
+  
+
+Theorem add_new_item_to_list :
+    forall max,
+      forall l : limited_list max,
+        forall x : {x' : nat| x' < max},
+          exists_in_list (proj1_sig x) l = false ->
+            not_in_limited_list (limited_list_cons x l) < not_in_limited_list l.
+Proof.
+  intros.
+  destruct l. 
+  unfold not_in_limited_list. induction max. simpl. destruct x. inversion l0. 
+  unfold not_in_limited_list_aux. simpl. fold not_in_limited_list_aux. 
+
+unfold not_in_limited_list_aux. unfold limited_list_cons. simpl. fold not_in_limited_list_aux.
+
+ simpl. 
+  unfold limited_list_cons. 
+  unfold not_in_limited_list. unfold not_in_limited_list_aux. 
+  simpl.
+  *)
+
+Local Obligation Tactic :=
+  program_simpl;
+  simpl; intros;
+    try (split; unfold not; intros; inversion H0; fail).
+
+Program Fixpoint parse_xref_table_at 
+  (xs : list ascii)
+  (offset : { o : nat | o < List.length xs})
+  (checked_offsets : limited_list (List.length xs)) 
+  {measure (not_in_limited_list checked_offsets)}
+  :=
+
+  let already_seen := existsb (beq_nat offset) (proj1_sig checked_offsets) in
+    match already_seen with
+      | true => NoneE "Mutually recursive definition of xref lists"
+      | false => 
+        match skip_to_offset xs offset with
+          | NoneE err => NoneE err
+          | SomeE xs' => 
+            match parse_xref_table xs' with
+              | NoneE err => NoneE err
+              | SomeE (table, (PDF.PDFDictionary trailer)) =>
+                match PDF.dictFindEntry trailer "Prev" with
+                  | None => SomeE (table, trailer)
+                  | Some (PDF.PDFNumber (PDF.Integer offset')) =>
+                    let invalid_offset := leb (List.length xs) (Zabs_nat offset') in 
+                      match invalid_offset with
+                        | true =>
+                          NoneE "Illegal offset encountered while seeking xref table"
+                        | false => (* really need to concatenate tables here *)
+                          parse_xref_table_at xs (Zabs_nat offset') 
+                          (exist _ (offset::(proj1_sig checked_offsets)) _)
+                      end
+                  | _ => NoneE "Invalid Prev reference in trailer"
+                end
+              | SomeE (table, _) => NoneE "trailer is not a dictionary"
+            end
+        end
+      end.
+Next Obligation.
+  apply leb_complete_conv. symmetry. assumption.
+Defined.
+Next Obligation.
+  destruct H. subst. exact H0.
+  unfold limited_list in *.
+  destruct checked_offsets. simpl in H. apply l. exact H.
+Defined.
+Next Obligation. 
+  unfold not_in_limited_list. simpl. clear - H Heq_already_seen. 
+  induction (Datatypes.length xs). inversion H. 
+  simpl. remember (beq_nat n offset) as B. destruct B. simpl. apply beq_nat_eq in HeqB. subst. rewrite <- Heq_already_seen. 
+  unfold not_in_limited_list_aux at 1. simpl. 
+
+
+unfold not_in_limited_list_aux. simpl. unfold not_in_limited_list_aux.
+  simpl.
+  (* come up with a lemma about adding something to a limited_list *)
+admit.
+Defined.
+
+Program Definition find_and_parse_xref_table (xs : list ascii) :=
   match find_xref_offset xs with
     | NoneE err => NoneE err
-    | SomeE offset
-      => match skip_to_offset xs offset with
-           | NoneE err => NoneE err
-           | SomeE xs' => parse_xref_table xs'
-         end
+    | SomeE offset => parse_xref_table_at xs offset (exist _ [] _)
   end.
+Next Obligation.
+  elim H.
+Defined.
 
 Fixpoint remove_free_from_xref x : list Xref_table_entry :=
   match x with
@@ -919,7 +1151,7 @@ Module Import TableEntrySort := Sort TableEntryOrder.
 Definition read_xref_table xs :=
   match find_and_parse_xref_table xs with 
     | NoneE e => NoneE ("Error parsing xref table: " ++ e)%string 
-    | SomeE table => SomeE (sort (remove_free_from_xref table)) 
+    | SomeE (table, trailer) => SomeE (sort (remove_free_from_xref table)) 
   end.
 
 Require Import NPeano.
