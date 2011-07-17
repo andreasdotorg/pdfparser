@@ -131,6 +131,10 @@ Qed.
 
 (** *** Properties of `rev_sort`ed Lists **)
 
+(**
+  For a sorted `limited_unique_list`, the head is bigger than any element of the rest.
+**)
+
 Theorem rev_sort__max_hd : forall {max y} {xs ys}, limited_unique_list max xs ->
     rev_sort xs = (y :: ys) -> forall x, In x ys -> x < y.
 Proof. (* XXX TODO XXX *) Admitted.
@@ -140,11 +144,19 @@ Proof. (* XXX TODO XXX *) Admitted.
    ... |- every element in rest is smaller than y
 *)
 
+(**
+  For a sorted list, the tail is also sorted.
+**)
+
 Theorem rev_sort__rev_sort_tl : forall {xs},
     rev_sort xs = xs -> rev_sort (tl xs) = (tl xs).
 Proof. (* XXX TODO XXX *) Admitted.
 
 (** *** Reducing `max` in limited_unique_list **)
+
+(**
+  `max` can be reduced if the biggest element is at most `pred max`.
+**)
 
 Theorem limited_unique_list_pred : forall {max xs},
     limited_unique_list max xs -> ~ In max xs ->
@@ -156,6 +168,11 @@ Proof.
         apply IHlimited_unique_list in H4; constructor; try assumption.
     destruct max; simpl; inversion H0; subst; try assumption; elim (H3 eq_refl).
 Qed.
+
+(**
+  ensuring reducibility of `max` by dropping the first element of the sorted list
+  if necessary.
+**)
 
 Definition drop_hd_if_max (max : nat) (xs0 : list nat) :=
   match xs0 with
@@ -196,6 +213,10 @@ Proof.
     inversion H1; assumption.
 Qed.
 
+(**
+  `max` can always be increased.
+**)
+
 Theorem limited_unique_list_increasemax : forall max xs,
   limited_unique_list max xs -> limited_unique_list (S max) xs.
 Proof.
@@ -204,13 +225,26 @@ Qed.
 
 (** ** Filling the limited_unique_list **)
 
+(**
+  If an element is bigger than `max` it cannot be inserted.
+**)
+
 Theorem limited_unique_list_toobig : forall max x xs, max < x -> ~ limited_unique_list max (x::xs).
 Proof.
   intros; intro C; inversion C; subst; omega.
 Qed.
 
+(**
+  A `limited_unique_list` that contains all elements and is sorted.
+  (List is equivalent to [max..0].)
+**)
+
 Definition limited_unique_list_full_sorted max l :=
   limited_unique_list max l /\ length l = S max /\ rev_sort l = l.
+
+(**
+  Induction principle preserving full-ness of the list.
+**)
 
 Theorem limited_unique_list_full_sorted_ind : forall (P : nat -> list nat -> Prop),
     P 0 [0]
@@ -235,6 +269,10 @@ Proof.
             (repeat split; try assumption; apply H5).
     inversion H1; refine (HI _ _ _ H7 (IHmax _ H7) _ _); assumption.
 Qed.
+
+(**
+  No element can be inserted into a full `limited_unique_list`.
+**)
 
 Theorem limited_unique_list_full_all : forall max xs,
     limited_unique_list_full_sorted max xs
@@ -301,6 +339,10 @@ Proof.
         symmetry in H1; apply beq_nat_eq in H1; subst; assumption.
 Qed.
 
+(**
+  The safe insertion function.
+**)
+
 Definition lucons {max : nat} (x : nat) (xs : list nat) : option (list nat) :=
   if is_lulist max (x::xs)
     then Some (x :: xs)
@@ -316,6 +358,10 @@ Proof.
     rewrite <- is_lulist_iff_limited_unique_list in H0;
       unfold lucons; rewrite <- H0; reflexivity.
 Qed.
+
+(**
+  Proof helper, unfolding one level of the list.
+**)
 
 Theorem lucons_step : forall max x xs v, @lucons max x xs = v ->
   (v = Some (x :: xs) /\ x <= max /\ ~ In x xs) \/ (v = None).
