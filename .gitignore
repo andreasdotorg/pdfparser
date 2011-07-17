@@ -1,9 +1,14 @@
 *~
 *.glob
 *.vo
+*.v.d
 *.cmi
 *.cmo
+*.cmx
+*.o
 parser.ml
 parser.mli
 allparser.ml
 allparser.mli
+Makefile.coq
+Makefile-localvars.gen
