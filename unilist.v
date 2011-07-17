@@ -9,6 +9,9 @@ Require Import Coq.Arith.Arith.
 
 Require Import Omega.
 
+Require Import Coq.Sorting.Permutation.
+Require Import Coq.Sorting.PermutEq.
+
 Require Import Coq.Program.Program.
 Require Import Coq.Program.Tactics.
 Require Import Coq.Program.Wf.
@@ -16,12 +19,243 @@ Require Import Coq.Program.Wf.
 Open Scope bool_scope.
 Open Scope nat_scope.
 
+(** * limited_unique_list
+
+  This is an inductive predicate for lists containing every number up
+  to `max` at most once.
+
+**)
+
 Inductive limited_unique_list (max : nat) : list nat -> Prop :=
   | LUNil  : limited_unique_list max nil
   | LUCons : forall x xs, limited_unique_list max xs
              -> x <= max
              -> ~ (In x xs)
              -> limited_unique_list max (x :: xs).
+
+(** ** Permutability **)
+
+(**
+  Inversion of a `In` hypothesis sometimes yields an unfolded definition.
+  This folds it back.
+**)
+
+Theorem In_pretty_please : forall {A : Type} {x : A} {l},
+    (fix In (a : A) (l : list A) {struct l} : Prop :=
+       match l with
+       | nil => False
+       | b :: m => b = a \/ In a m
+       end) x l
+    -> In x l.
+Proof.
+  intros; induction l.
+    inversion H.
+    inversion H; subst.
+      constructor; reflexivity.
+      pose proof (IHl H0); constructor 2; assumption.
+Defined.
+
+(**
+  `In` and `~ In` are preserved under `Permutation`.
+**)
+
+Theorem Permutation_In : forall {A : Type} (a:A) {xs ys}, Permutation xs ys ->
+    (In a xs <-> In a ys).
+Proof.
+  intros; generalize dependent a; induction H; simpl; intros.
+    split; intro; assumption.
+    split; intro H0; inversion H0; subst; try (left; reflexivity); right;
+      [ rewrite <- IHPermutation | rewrite IHPermutation ]; assumption.
+    split; intro; inversion H as [H1|H1]; subst; try (right; left; reflexivity);
+      inversion H1 as [H2|H2]; subst; try (left; reflexivity); right; right; assumption.
+    rewrite IHPermutation1; apply IHPermutation2.
+Defined.
+
+Theorem Permutation_not_In : forall {A : Type} (a:A) {xs ys}, Permutation xs ys ->
+    (~ In a xs <-> ~ In a ys).
+Proof.
+  intros; split; intros; intro C; apply H0.
+    rewrite <- (Permutation_In _ H) in C; assumption.
+    rewrite -> (Permutation_In _ H) in C; assumption.
+Defined.
+
+(**
+  Permutation preserves `limited_unique_list` and `~ limited_unique_list`
+**)
+
+Theorem Permutation_limited_unique_list : forall max {xs ys}, Permutation xs ys ->
+    (limited_unique_list max xs <-> limited_unique_list max ys).
+Proof.
+  intros; induction H; simpl in *; intros.
+    split; intros; assumption.
+    split; intro; inversion H0; subst.
+      rewrite (Permutation_not_In x H) in H5; constructor; try assumption;
+          rewrite <- IHPermutation; assumption.
+      rewrite <- (Permutation_not_In x H) in H5; constructor; try assumption;
+          rewrite IHPermutation; assumption.
+    split; intros; inversion H; subst;
+      inversion H2; subst; repeat constructor; try assumption;
+        try (intro C; apply H4; constructor 2; assumption);
+        intro C; inversion C; subst;
+          try (apply H4; constructor; reflexivity);
+          pose proof (In_pretty_please H0); clear H0; apply (H7 H1).
+    rewrite IHPermutation1; assumption.
+Defined.
+
+Theorem Permutation_not_limited_unique_list : forall max {xs ys}, Permutation xs ys ->
+    (~ limited_unique_list max xs <-> ~ limited_unique_list max ys).
+Proof.
+  intros; split; intros; intro C; apply H0.
+    rewrite (Permutation_limited_unique_list _ H); assumption.
+    rewrite <- (Permutation_limited_unique_list _ H); assumption.
+Defined.
+
+(** *** Some Useful Permutations **)
+
+(* Permutation_rev : Permutation xs (rev xs) *)
+
+Definition sort := Mergesort.NatSort.sort.
+
+Definition Permutation_sort : forall l, Permutation l (sort l) :=
+  Mergesort.NatSort.Permuted_sort.
+
+Definition rev_sort x := rev (sort x).
+
+Theorem Permutation_rev_sort : forall l, Permutation l (rev_sort l).
+Proof.
+  intro l; unfold rev_sort.
+  eapply Permutation_trans.
+    apply Permutation_sort.
+    apply Permutation_rev.
+Qed.
+
+(** *** Properties of `rev_sort`ed Lists **)
+
+Theorem rev_sort__max_hd : forall {max y} {xs ys}, limited_unique_list max xs ->
+    rev_sort xs = (y :: ys) -> forall x, In x ys -> x < y.
+Proof. (* XXX TODO XXX *) Admitted.
+(* rev_sort puts the biggest element first |- rest is smaller or equal
+   limited_unique_list |- every element is contained at most once
+   ... |- rest is strictly smaller
+   ... |- every element in rest is smaller than y
+*)
+
+Theorem rev_sort__rev_sort_tl : forall {xs},
+    rev_sort xs = xs -> rev_sort (tl xs) = (tl xs).
+Proof. (* XXX TODO XXX *) Admitted.
+
+(** *** Reducing `max` in limited_unique_list **)
+
+Theorem limited_unique_list_pred : forall {max xs},
+    limited_unique_list max xs -> ~ In max xs ->
+    limited_unique_list (pred max) xs.
+Proof.
+  intros max xs H; induction H; simpl; intros.
+    constructor.
+    apply Decidable.not_or in H2; inversion H2; clear H2;
+        apply IHlimited_unique_list in H4; constructor; try assumption.
+    destruct max; simpl; inversion H0; subst; try assumption; elim (H3 eq_refl).
+Qed.
+
+Definition drop_hd_if_max (max : nat) (xs0 : list nat) :=
+  match xs0 with
+  | nil     => nil
+  | (x::xs) => match beq_nat max x with
+               | true => xs
+               | false => (x::xs)
+               end
+  end.
+
+Theorem limited_unique_list_drop_hd_if_max : forall {max y} {xs ys},
+    limited_unique_list max xs -> rev_sort xs = (y :: ys) ->
+    limited_unique_list (pred max) (drop_hd_if_max max (y :: ys)).
+Proof.
+  intros max y xs ys H H0.
+  pose proof (Permutation_rev_sort xs); rewrite H0 in H1.
+  pose proof (Permutation_limited_unique_list max H1).
+  pose proof H; rewrite H2 in H3; clear H2.
+  inversion H3; subst; simpl.
+  pose proof (rev_sort__max_hd H H0).
+  pose proof (eq_nat_dec max y); destruct H4; subst.
+    rewrite <- beq_nat_refl; apply limited_unique_list_pred; assumption.
+    inversion H6; try (elimtype False; omega); subst.
+    rewrite <- beq_nat_false_iff in n; rewrite n.
+    apply limited_unique_list_pred; try assumption.
+    clear - H2 H4; intro C; induction C.
+      omega.
+      pose proof (H2 (S m) H); omega.
+Qed.
+
+Theorem limited_unique_list_drop_hd_any : forall max y xs ys,
+    limited_unique_list max xs -> rev_sort xs = (y :: ys) ->
+    limited_unique_list (pred max) ys.
+Proof.
+  intros; pose proof (limited_unique_list_drop_hd_if_max H H0).
+  unfold drop_hd_if_max in H1; destruct (beq_nat max y).
+    assumption.
+    inversion H1; assumption.
+Qed.
+
+Theorem limited_unique_list_increasemax : forall max xs,
+  limited_unique_list max xs -> limited_unique_list (S max) xs.
+Proof.
+  intros; induction H; subst; constructor; try assumption; omega.
+Qed.
+
+(** ** Filling the limited_unique_list **)
+
+Theorem limited_unique_list_toobig : forall max x xs, max < x -> ~ limited_unique_list max (x::xs).
+Proof.
+  intros; intro C; inversion C; subst; omega.
+Qed.
+
+Definition limited_unique_list_full_sorted max l :=
+  limited_unique_list max l /\ length l = S max /\ rev_sort l = l.
+
+Theorem limited_unique_list_full_sorted_ind : forall (P : nat -> list nat -> Prop),
+    P 0 [0]
+    -> (forall (max : nat) (x : nat) (xs : list nat),
+        limited_unique_list_full_sorted max xs ->
+        P max xs -> x <= (S max) -> ~ In x xs -> P (S max) (x :: xs))
+    -> forall max l, limited_unique_list_full_sorted max l
+    -> P max l.
+Proof.
+  intros P H0 HI max; induction max; simpl; intros; inversion H; inversion H2;
+          clear H H2; destruct l; inversion H3; rewrite H2 in *.
+    destruct l; inversion H2; inversion H1; inversion H7; subst; assumption.
+    pose proof (limited_unique_list_drop_hd_if_max H1 H4).
+    pose proof (rev_sort__rev_sort_tl H4); simpl in H5.    
+    assert (limited_unique_list max l). clear - H H1 H4.
+      inversion H1; subst; inversion H5; subst.
+        simpl in H; rewrite <- beq_nat_refl in H; assumption.
+        unfold drop_hd_if_max in H; assert ((S max) <> n) by omega.
+        rewrite <- beq_nat_false_iff in H0; rewrite H0 in *; simpl in H;
+        inversion H; assumption.
+    assert (limited_unique_list_full_sorted max l) by
+            (repeat split; try assumption; apply H5).
+    inversion H1; refine (HI _ _ _ H7 (IHmax _ H7) _ _); assumption.
+Qed.
+
+Theorem limited_unique_list_full_all : forall max xs,
+    limited_unique_list_full_sorted max xs
+    -> forall x, max < x \/ In x xs.
+Proof.
+  intros max xs H; induction H using limited_unique_list_full_sorted_ind.
+    intros; destruct x; [ right; constructor; reflexivity | left; omega ].
+    rename IHlimited_unique_list_full_sorted into IH; intro y.
+    pose proof (le_lt_dec y max) as E; destruct E.
+      pose proof (IH y); destruct H2.
+        elimtype False; omega.
+        right; right; assumption.
+      pose proof (eq_nat_dec (S max) y) as E; destruct E; subst.
+        Focus 2.  assert (S max < y) by omega; left; assumption.
+        right; inversion H0; subst.
+          left; reflexivity.
+          pose proof (IH x); inversion H2; elimtype False; try omega.
+            apply (H1 H4).
+Qed.
+
+(** * Computational Equivalent to `limited_unique_list` **)
 
 Fixpoint is_lulist (max : nat) (xs0 : list nat) : bool :=
   match xs0 with
@@ -84,7 +318,7 @@ Proof.
 Qed.
 
 Theorem lucons_step : forall max x xs v, @lucons max x xs = v ->
-  (v = Some (x :: xs) /\ x <= max /\ length xs < length (x::xs)) \/ (v = None).
+  (v = Some (x :: xs) /\ x <= max /\ ~ In x xs) \/ (v = None).
 Proof.
   intros.
   destruct v; [ left | right; reflexivity ].
@@ -94,22 +328,6 @@ Proof.
       remember (leb x max) as b; destruct b.
         symmetry in Heqb0; apply (leb_complete _ _ Heqb0).
         rewrite orb_true_r in Heqb; inversion Heqb.
-      simpl; constructor.
+      rewrite is_lulist_iff_limited_unique_list in Heqb; inversion Heqb; assumption.
     inversion H.
 Qed.
-
-Theorem lucons_toobig : forall max x xs, max < x -> @lucons max x xs = None.
-Proof.
-  intros; unfold lucons; unfold is_lulist; fold is_lulist.
-  unfold lt in H. apply leb_correct in H.
-  remember (leb x max) as b; destruct b.
-    apply leb_complete in H; symmetry in Heqb; apply leb_complete in Heqb; elimtype False; omega.
-    simpl; rewrite orb_true_r; reflexivity.
-Qed.
-
-Theorem limited_unique_list_increasemax : forall max xs,
-  limited_unique_list max xs -> limited_unique_list (S max) xs.
-Proof.
-  intros; induction H; subst; constructor; try assumption; omega.
-Qed.
-
