@@ -132,6 +132,14 @@ Qed.
 (** *** Properties of `rev_sort`ed Lists **)
 
 (**
+  No matter how you permute a list, sort will produce the same result.
+**)
+
+Theorem sort_Permutation__sort : forall {l l'}, Permutation l l' ->
+  sort l = sort l'.
+Proof.  (* XXX TODO XXX *)  Admitted.
+
+(**
   For a sorted `limited_unique_list`, the head is bigger than any element of the rest.
 **)
 
@@ -274,7 +282,7 @@ Qed.
   No element can be inserted into a full `limited_unique_list`.
 **)
 
-Theorem limited_unique_list_full_all : forall max xs,
+Theorem limited_unique_list_full_all : forall {max} {xs},
     limited_unique_list_full_sorted max xs
     -> forall x, max < x \/ In x xs.
 Proof.
@@ -291,6 +299,37 @@ Proof.
           left; reflexivity.
           pose proof (IH x); inversion H2; elimtype False; try omega.
             apply (H1 H4).
+Qed.
+
+Theorem limited_unique_list_full_noinsert : forall {max} {xs},
+    limited_unique_list_full_sorted max xs ->
+    forall x, ~ limited_unique_list max (x::xs).
+Proof.
+  intros.
+  pose proof (limited_unique_list_full_all H).
+  intro C; inversion C; subst.
+  pose proof (H0 x); inversion H1; try omega. apply (H5 H2).
+Qed.
+
+Theorem limited_unique_list__maxlength : forall {max} {xs},
+  limited_unique_list max xs ->
+  length xs <= S max.
+Proof.
+  intros max xs; generalize dependent max; induction xs.
+    intros; simpl; omega.
+    intros; inversion H; subst; simpl; pose proof (IHxs max H2); inversion H0.
+      pose proof (Permutation_rev_sort xs).
+      assert (limited_unique_list_full_sorted max (rev_sort xs)).
+        repeat split.
+          rewrite <- (Permutation_limited_unique_list max H1); assumption.
+          rewrite <- (Permutation_length H1); assumption.
+          SearchAbout "sort".
+          unfold rev_sort at 1; rewrite <- (sort_Permutation__sort H1); reflexivity.
+      pose proof (limited_unique_list_full_noinsert H6 a).
+      assert (Permutation (a::xs) (a :: rev_sort xs)) by (constructor 2; assumption).
+      rewrite (Permutation_limited_unique_list max H8) in H.
+      elim (H7 H).
+      omega.
 Qed.
 
 (** * Computational Equivalent to `limited_unique_list` **)
