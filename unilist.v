@@ -343,7 +343,7 @@ Qed.
   The safe insertion function.
 **)
 
-Definition lucons {max : nat} (x : nat) (xs : list nat) : option (list nat) :=
+Definition lucons (max : nat) (x : nat) (xs : list nat) : option (list nat) :=
   if is_lulist max (x::xs)
     then Some (x :: xs)
     else None.
