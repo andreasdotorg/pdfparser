@@ -54,6 +54,22 @@ Program Fixpoint dictFindEntry (d : DictEntry) (k : string) : option PDFObject :
     end
   end.
 
+Program Fixpoint dictFindRec (d : DictEntry) (k : string) : list PDFObject :=
+  match d with
+  | DictEmpty => []
+  | NextEntry k' v d' =>
+    let rest :=
+      match v with
+      | PDFDictionary dic => (dictFindRec dic k) ++ dictFindRec d' k
+      | _                 => dictFindRec d' k
+      end
+    in
+      match string_dec k k' with
+      | left  _ => cons v rest
+      | right _ => rest
+      end
+  end.
+
 Program Fixpoint list2dict (l : list (string * PDFObject)) (d : DictEntry) : option DictEntry :=
   match l with
   | nil     => Some d

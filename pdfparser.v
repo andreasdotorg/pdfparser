@@ -883,7 +883,7 @@ Program Fixpoint parse_xref_table_at
   {measure ((List.length xs) - (List.length checked_offsets))}
   :=
 
-  match lucons (List.length xs) offset checked_offsets with
+  match @lucons (List.length xs) offset checked_offsets with
     | None => NoneE "Error: xref table loop or illegal offset"
     | Some checked_offsets' =>
       match skip_to_offset xs offset with
@@ -911,11 +911,8 @@ Defined.
 Program Definition find_and_parse_xref_table (xs : list ascii) :=
   match find_xref_offset xs with
     | NoneE err => NoneE err
-    | SomeE offset => parse_xref_table_at xs offset (exist _ [] _)
+    | SomeE offset => parse_xref_table_at xs offset (exist (fun _ => True) [] _)
   end.
-Next Obligation.
-  elim H.
-Defined.
 
 Fixpoint remove_free_from_xref x : list Xref_table_entry :=
   match x with
@@ -1046,15 +1043,20 @@ Definition get_obj_from_table_entry xs table_entry :=
 Definition is_evil obj :=
   match obj with
     | (PDF.PDFDictionary dict) =>
-      match PDF.dictFindEntry dict "JavaScript" with
-        | None   => 
-          match PDF.dictFindEntry dict "S" with
-            | None => false
-            | Some (PDF.PDFName "JavaScript") => true
-            | Some (PDF.PDFName "Rendition")  => true
-            | _ => false
-          end
-        | Some _ => true
+      match PDF.dictFindRec dict "JavaScript" with
+        | nil => 
+          match PDF.dictFindRec dict "S" with
+            | nil  => false
+            | l =>
+              list_rec _ (fun _ => bool) false
+              (fun x c rec =>
+                match x with
+                | PDF.PDFName "JavaScript" => true
+                | PDF.PDFName "Rendition"  => true
+                | _ => rec
+                end) l
+            end
+        | cons _ _ => true
       end
     | _ => false
   end.
