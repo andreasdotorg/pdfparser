@@ -23,7 +23,8 @@ pdfparser.vo: allcoq
 parser.ml: pdfparser.vo
 parser.mli: pdfparser.vo
 allparser.ml: parser.ml preamble.ml pdfparser.vo
-	cat preamble.ml parser.ml > allparser.ml
+	cat preamble.ml parser.ml | perl -e 'while (<>) { if ($$_ =~ /^ *let rec (\S+) = \g{-1}$$/) { $$_ = "  let $$1 = $$1\n"; } print $$_; }' > allparser.ml
+
 allparser.mli: parser.mli ipreamble.ml pdfparser.vo
 	cat ipreamble.ml parser.mli > allparser.mli
 allparser.cmi: allparser.mli
