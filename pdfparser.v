@@ -869,248 +869,50 @@ Definition parse_xref_table (xs : list ascii) :=
 
 (* Eval compute in parse_xref_table (list_of_string "xref 23 2 0000000005 00002 f 0000000003 00001 n 42 1 0000000003 00001 n "%string). *)
 
-Fixpoint In_sig {A:Type} {B:Prop} (a:A) (l:list {A|B}) :=
-  match l with
-    | nil => False
-    | b :: m => (proj1_sig b) = a \/ In_sig a m
-  end.
-
-Check List.existsb.
-
-Check beq_nat.
-
-Definition limited_list max := {l : list nat | forall x, In x l -> x < max}.
-
-Program Definition limited_list_cons {max} (x : {x' : nat| x' < max}) (l : limited_list max) 
-  : limited_list max :=
-  exist _ ((proj1_sig x)::(proj1_sig l)) _.
-Next Obligation.
-  destruct H. subst. exact H0.
-  destruct l. simpl in H. apply l. exact H.
-Defined.
-
-Definition exists_in_list {max} x (l : limited_list max) :=
-  existsb (beq_nat x) (proj1_sig l).
-
-Fixpoint not_in_limited_list_aux x (l : list nat)  i :=
-  match x with
-    | 0      => i
-    | (S x') => 
-      not_in_limited_list_aux x' l 
-        (i + (if existsb (beq_nat x') l then 0 else 1))
-  end.
-
-Definition not_in_limited_list {max} (l : limited_list max) :=
-  not_in_limited_list_aux max (proj1_sig l) 0.
-
-
-Theorem niil_S:
-  forall x l i,
-        S (not_in_limited_list_aux x l i) = not_in_limited_list_aux x l (S i).
-Proof.
-  intros x l.
-  induction x. reflexivity.
-  simpl. remember (existsb (beq_nat x) l) as H.  destruct H; intro i; apply IHx.
-Qed.
-
-Theorem cons__list_foo :
-  forall x n l i,
-          existsb (beq_nat n) l = true ->
-            not_in_limited_list_aux x l i = not_in_limited_list_aux x (n::l) i.
-Proof.
-  intros.
-  induction i. 
-    induction x. reflexivity.
-    simpl. remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB. subst. simpl. rewrite H. exact IHx.
-    simpl. remember (existsb (beq_nat x) l) as B. destruct B. exact IHx.
-    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHx.
-    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHi.
-Qed.
-
-Theorem cons__list_foo2 :
-  forall x n l i,
-    n < x ->
-      existsb (beq_nat n) l = false ->
-        S (not_in_limited_list_aux x l i) = not_in_limited_list_aux x (n::l) i.
-Proof.
-  intros.
-  induction i. generalize dependent n. 
-    induction x. intros. inversion H.
-    intros. simpl. remember (existsb (beq_nat x) l) as B. destruct B. rewrite orb_true_r. 
-    assert (n <> x). unfold not. intros. subst. rewrite H0 in HeqB. inversion HeqB. 
-    assert (n < x). clear - H H1. inversion H. contradiction (H1 H2). unfold lt. exact H2.
-    apply (IHx _ H2 H0).
-    remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB0. subst. simpl. 
-    
-
-reflexivity.
-    simpl. remember (beq_nat x n) as B. destruct B. apply beq_nat_eq in HeqB. subst. simpl. rewrite H. exact IHx.
-    simpl. remember (existsb (beq_nat x) l) as B. destruct B. exact IHx.
-    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHx.
-    rewrite <- niil_S. rewrite <- niil_S. f_equal. exact IHi.
-Qed.
-
-
-  
-(*
-
-Theorem cons_to_list_exist_true :
-    forall max,
-      forall l : limited_list max,
-        forall x : {x' : nat| x' < max},
-          exists_in_list (proj1_sig x) (limited_list_cons x l) = true.
-Proof.
-  intros. 
-  unfold limited_list_cons. unfold exists_in_list. unfold existsb. simpl. 
-  rewrite <- beq_nat_refl. reflexivity. 
-Qed.
-
-Theorem empty_list_is_limited :
-  forall max,
-    exists l : limited_list max,
-      (proj1_sig l) = [].
-Proof.
-  intros. unfold limited_list. intros.
-  eexists. unfold proj1_sig. simpl. 
-
-
-Theorem cons_to_empty_list :
-  forall max,
-    forall l : limited_list max,
-      (proj1_sig l) = [] -> not_in_limited_list l = max. 
-Proof.
-  intros.
-  cbv. cbv in H.
-  unfold not_in_limited_list. cbv. simpl. unfold not_in_limited_list_aux. unfold exists_in_list. cbv. simpl. 
-
-
-Theorem cons_to_empty_list :
-    forall max,
-      forall l : limited_list max,
-        forall x y i : {x' : nat| x' < max},
-          exists_in_list (proj1_sig x) l = true ->
-            not_in_limited_list_aux (proj1_sig y) (limited_list_cons x l) (proj1_sig i) 
-              = not_in_limited_list_aux (proj1_sig y) l (proj1_sig i).
-Proof.
-  intros.
-  induction (proj1_sig y).
-  unfold not_in_limited_list_aux. reflexivity.
-  unfold not_in_limited_list_aux. 
-  destruct (beq_nat n (proj1_sig x)).
-
-Theorem cons_to_empty_list :
-    forall max,
-      forall l : limited_list max,
-        forall x : {x' : nat| x' < max},
-          (proj1_sig l) = [] ->
-            (S (not_in_limited_list (limited_list_cons x l))) = not_in_limited_list l.
-Proof.
-  intros.
-  induction l. destruct H. 
-  unfold not_in_limited_list. unfold not_in_limited_list_aux. unfold limited_list_cons.
-  fold limited_list_aux. 
-simpl. 
-
-Theorem add_existing_item_to_list :
-    forall max,
-      forall l : limited_list max,
-        forall x : {x' : nat| x' < max},
-          exists_in_list (proj1_sig x) l = true ->
-            not_in_limited_list (limited_list_cons x l) = not_in_limited_list l.
-Proof.
-  intros.
-  induction x.
-  unfold not_in_limited_list. unfold not_in_limited_list_aux. unfold not_in_limited_list_aux. unfold limited_list_cons. simpl. 
-  
-
-Theorem add_new_item_to_list :
-    forall max,
-      forall l : limited_list max,
-        forall x : {x' : nat| x' < max},
-          exists_in_list (proj1_sig x) l = false ->
-            not_in_limited_list (limited_list_cons x l) < not_in_limited_list l.
-Proof.
-  intros.
-  destruct l. 
-  unfold not_in_limited_list. induction max. simpl. destruct x. inversion l0. 
-  unfold not_in_limited_list_aux. simpl. fold not_in_limited_list_aux. 
-
-unfold not_in_limited_list_aux. unfold limited_list_cons. simpl. fold not_in_limited_list_aux.
-
- simpl. 
-  unfold limited_list_cons. 
-  unfold not_in_limited_list. unfold not_in_limited_list_aux. 
-  simpl.
-  *)
-
 Local Obligation Tactic :=
   program_simpl;
   simpl; intros;
-    try (split; unfold not; intros; inversion H0; fail).
+    try (repeat split; intros; intro C; inversion C; fail).
+
+Require Import unilist.
 
 Program Fixpoint parse_xref_table_at 
   (xs : list ascii)
-  (offset : { o : nat | o < List.length xs})
-  (checked_offsets : limited_list (List.length xs)) 
-  {measure (not_in_limited_list checked_offsets)}
+  (offset : nat)
+  (checked_offsets : list nat) 
+  {measure ((List.length xs) - (List.length checked_offsets))}
   :=
 
-  let already_seen := existsb (beq_nat offset) (proj1_sig checked_offsets) in
-    match already_seen with
-      | true => NoneE "Mutually recursive definition of xref lists"
-      | false => 
-        match skip_to_offset xs offset with
-          | NoneE err => NoneE err
-          | SomeE xs' => 
-            match parse_xref_table xs' with
-              | NoneE err => NoneE err
-              | SomeE (table, (PDF.PDFDictionary trailer)) =>
-                match PDF.dictFindEntry trailer "Prev" with
-                  | None => SomeE (table, trailer)
-                  | Some (PDF.PDFNumber (PDF.Integer offset')) =>
-                    let invalid_offset := leb (List.length xs) (Zabs_nat offset') in 
-                      match invalid_offset with
-                        | true =>
-                          NoneE "Illegal offset encountered while seeking xref table"
-                        | false => (* really need to concatenate tables here *)
-                          parse_xref_table_at xs (Zabs_nat offset') 
-                          (exist _ (offset::(proj1_sig checked_offsets)) _)
-                      end
-                  | _ => NoneE "Invalid Prev reference in trailer"
-                end
-              | SomeE (table, _) => NoneE "trailer is not a dictionary"
-            end
-        end
-      end.
+  match @lucons (List.length xs) offset checked_offsets with
+    | None => NoneE "Error: xref table loop or illegal offset"
+    | Some checked_offsets' =>
+      match skip_to_offset xs offset with
+        | NoneE err => NoneE err
+        | SomeE xs' => 
+          match parse_xref_table xs' with
+            | NoneE err => NoneE err
+            | SomeE (table, (PDF.PDFDictionary trailer)) =>
+              match PDF.dictFindEntry trailer "Prev" with
+                | None => SomeE (table, trailer)
+                | Some (PDF.PDFNumber (PDF.Integer offset')) =>
+                   (* really need to concatenate tables here *)
+                  parse_xref_table_at xs (Zabs_nat offset') checked_offsets' 
+                | _ => NoneE "Invalid Prev reference in trailer"
+              end
+            | SomeE (table, _) => NoneE "trailer is not a dictionary"
+          end
+      end
+  end.
 Next Obligation.
-  apply leb_complete_conv. symmetry. assumption.
+  admit.
 Defined.
-Next Obligation.
-  destruct H. subst. exact H0.
-  unfold limited_list in *.
-  destruct checked_offsets. simpl in H. apply l. exact H.
-Defined.
-Next Obligation. 
-  unfold not_in_limited_list. simpl. clear - H Heq_already_seen. 
-  induction (Datatypes.length xs). inversion H. 
-  simpl. remember (beq_nat n offset) as B. destruct B. simpl. apply beq_nat_eq in HeqB. subst. rewrite <- Heq_already_seen. 
-  unfold not_in_limited_list_aux at 1. simpl. 
 
-
-unfold not_in_limited_list_aux. simpl. unfold not_in_limited_list_aux.
-  simpl.
-  (* come up with a lemma about adding something to a limited_list *)
-admit.
-Defined.
 
 Program Definition find_and_parse_xref_table (xs : list ascii) :=
   match find_xref_offset xs with
     | NoneE err => NoneE err
-    | SomeE offset => parse_xref_table_at xs offset (exist _ [] _)
+    | SomeE offset => parse_xref_table_at xs offset (exist (fun _ => True) [] _)
   end.
-Next Obligation.
-  elim H.
-Defined.
 
 Fixpoint remove_free_from_xref x : list Xref_table_entry :=
   match x with
@@ -1241,15 +1043,20 @@ Definition get_obj_from_table_entry xs table_entry :=
 Definition is_evil obj :=
   match obj with
     | (PDF.PDFDictionary dict) =>
-      match PDF.dictFindEntry dict "JavaScript" with
-        | None   => 
-          match PDF.dictFindEntry dict "S" with
-            | None => false
-            | Some (PDF.PDFName "JavaScript") => true
-            | Some (PDF.PDFName "Rendition")  => true
-            | _ => false
-          end
-        | Some _ => true
+      match PDF.dictFindRec dict "JavaScript" with
+        | nil => 
+          match PDF.dictFindRec dict "S" with
+            | nil  => false
+            | l =>
+              list_rec _ (fun _ => bool) false
+              (fun x c rec =>
+                match x with
+                | PDF.PDFName "JavaScript" => true
+                | PDF.PDFName "Rendition"  => true
+                | _ => rec
+                end) l
+            end
+        | cons _ _ => true
       end
     | _ => false
   end.
